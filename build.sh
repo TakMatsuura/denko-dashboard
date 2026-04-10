@@ -41,29 +41,55 @@ echo "=== Step 2: Download CSVs ==="
 START="2025%2F05%2F01"
 END="2026%2F04%2F30"
 
-# Debug: test first download with verbose headers
-echo "  Testing CSV URL..."
-curl -s -L -b "$COOKIE_JAR" -D /tmp/headers.txt "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" -o "$DATA_DIR/dept_sales.csv"
-echo "  Response headers:"
-grep -i "content-type\|location\|HTTP/" /tmp/headers.txt
-echo "  File size: $(wc -c < "$DATA_DIR/dept_sales.csv") bytes"
-echo "  First 100 chars: $(head -c 100 "$DATA_DIR/dept_sales.csv")"
-echo "Downloaded: dept_sales"
+# Helper: first load search page, then download export
+download_csv() {
+  local search_url="$1"
+  local export_url="$2"
+  local output="$3"
+  local name="$4"
+  # Step A: Load search results page (stores results in session)
+  curl -s -L -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$search_url" > /dev/null
+  # Step B: Download CSV export
+  curl -s -L -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$export_url" -o "$output"
+  local size=$(wc -c < "$output")
+  echo "Downloaded: $name ($size bytes)"
+}
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=customer&grouping%5B%5D=section&file-format=csv" -o "$DATA_DIR/dept_customer_sales.csv"
-echo "Downloaded: dept_customer_sales"
+# 1. Dept + Month sales
+download_csv \
+  "$FLAM_URL/sales/totalize?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20" \
+  "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" \
+  "$DATA_DIR/dept_sales.csv" "dept_sales"
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&file-format=csv" -o "$DATA_DIR/dept_product_sales.csv"
-echo "Downloaded: dept_product_sales"
+# 2. Dept + Customer sales
+download_csv \
+  "$FLAM_URL/sales/totalize?startdate=$START&enddate=$END&grouping%5B%5D=customer&grouping%5B%5D=section&limit=20" \
+  "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=customer&grouping%5B%5D=section&file-format=csv" \
+  "$DATA_DIR/dept_customer_sales.csv" "dept_customer_sales"
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/purchases/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" -o "$DATA_DIR/dept_purchase.csv"
-echo "Downloaded: dept_purchase"
+# 3. Dept + Product + Month sales
+download_csv \
+  "$FLAM_URL/sales/totalize?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&limit=20" \
+  "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&file-format=csv" \
+  "$DATA_DIR/dept_product_sales.csv" "dept_product_sales"
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/orders/report/view/analysis/export?rt=1&sd=$START&ed=$END&fi=&file-format=csv" -o "$DATA_DIR/orders.csv"
-echo "Downloaded: orders"
+# 4. Dept + Supplier + Month purchase
+download_csv \
+  "$FLAM_URL/purchases/totalize?startdate=$START&enddate=$END&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20" \
+  "$FLAM_URL/purchases/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" \
+  "$DATA_DIR/dept_purchase.csv" "dept_purchase"
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/stockrecents/export/download?file-format=csv" -o "$DATA_DIR/stockrecents.csv"
-echo "Downloaded: stockrecents"
+# 5. Orders
+download_csv \
+  "$FLAM_URL/orders/report/view/analysis?preview=1&rt=1&sd=$START&ed=$END&fi=" \
+  "$FLAM_URL/orders/report/view/analysis/export?rt=1&sd=$START&ed=$END&fi=&file-format=csv" \
+  "$DATA_DIR/orders.csv" "orders"
+
+# 6. Stock
+download_csv \
+  "$FLAM_URL/stockrecents/export" \
+  "$FLAM_URL/stockrecents/export/download?file-format=csv" \
+  "$DATA_DIR/stockrecents.csv" "stockrecents"
 
 echo "=== Step 3: Convert encoding ==="
 for f in "$DATA_DIR"/*.csv; do
