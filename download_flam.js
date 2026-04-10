@@ -14,13 +14,13 @@ async function downloadCSV(page, searchUrl, filename) {
   await page.waitForTimeout(2000);
 
   // Click download button to open menu
-  await page.click('#btn_download');
-  await page.waitForTimeout(1000);
+  await page.locator('#btn_download').click({ force: true });
+  await page.waitForTimeout(1500);
 
   // Click CSV option and wait for download
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60000 }),
-    page.click('a[data-format="csv"]'),
+    page.locator('a[data-format="csv"]').first().click({ force: true }),
   ]);
 
   const filePath = path.join(DATA_DIR, filename);
