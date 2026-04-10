@@ -41,13 +41,12 @@ echo "Downloaded: stockrecents"
 
 echo "=== Step 3: Convert encoding ==="
 for f in "$DATA_DIR"/*.csv; do
-  if file "$f" | grep -qi "shift\|iso-8859\|Non-ISO"; then
-    iconv -f SHIFT_JIS -t UTF-8 "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-    echo "Converted: $(basename $f)"
-  else
-    sed -i '1s/^\xEF\xBB\xBF//' "$f" 2>/dev/null || true
-    echo "OK: $(basename $f)"
-  fi
+  # Debug: show file size and first bytes
+  echo "  $(basename $f): $(wc -c < "$f") bytes, type: $(file -b "$f" | head -c 50)"
+  # Force convert from Shift-JIS to UTF-8 (FLAM always returns Shift-JIS)
+  iconv -f SHIFT_JIS -t UTF-8 "$f" > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f" && echo "  Converted: $(basename $f)" || echo "  Already UTF-8 or failed: $(basename $f)"
+  # Remove BOM if present
+  sed -i '1s/^\xEF\xBB\xBF//' "$f" 2>/dev/null || true
 done
 
 echo "=== Step 4: Build HTML ==="
