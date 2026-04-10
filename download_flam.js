@@ -9,34 +9,28 @@ const DATA_DIR = '/tmp/flam_data';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-async function downloadCSV(page, searchUrl, filename) {
-  await page.goto(searchUrl, { waitUntil: 'networkidle' });
+async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
+  // Step 1: Load search page (populates session)
+  await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 60000 });
   await page.waitForTimeout(2000);
+  console.log(`  Loaded search: ${filename}`);
 
-  // Use JavaScript to directly trigger download via the page's own mechanism
-  // First, make the dropdown visible, then click CSV
-  await page.evaluate(() => {
-    const menu = document.querySelector('.pulldown_extract, .pulldown, .additional');
-    if (menu) menu.style.display = 'block';
-    const allMenus = document.querySelectorAll('[class*="pulldown"]');
-    allMenus.forEach(m => m.style.display = 'block');
-  });
-  await page.waitForTimeout(500);
+  // Step 2: Get cookies from browser context
+  const cookies = await context.cookies();
+  const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-  // Click CSV link
-  const [download] = await Promise.all([
-    page.waitForEvent('download', { timeout: 60000 }),
-    page.evaluate(() => {
-      const csvLink = document.querySelector('a[data-format="csv"]');
-      if (csvLink) csvLink.click();
-    }),
-  ]);
+  // Step 3: Fetch export URL using page.evaluate (same session)
+  const response = await page.evaluate(async (url) => {
+    const res = await fetch(url, { credentials: 'include' });
+    const text = await res.text();
+    return { status: res.status, contentType: res.headers.get('content-type'), length: text.length, text: text };
+  }, exportUrl);
+
+  console.log(`  Export response: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
 
   const filePath = path.join(DATA_DIR, filename);
-  await download.saveAs(filePath);
-  const size = fs.statSync(filePath).size;
-  console.log(`Downloaded: ${filename} (${size} bytes)`);
-  return filePath;
+  fs.writeFileSync(filePath, response.text);
+  console.log(`Downloaded: ${filename} (${response.length} bytes)`);
 }
 
 (async () => {
@@ -45,58 +39,48 @@ async function downloadCSV(page, searchUrl, filename) {
   const context = await browser.newContext();
   const page = await context.newPage();
 
-  await page.goto(`${FLAM_URL}/login`);
+  await page.goto(`${FLAM_URL}/login`, { waitUntil: 'networkidle' });
   await page.fill('input[name="data[User][loginid]"]', FLAM_ID);
   await page.fill('input[name="data[User][password]"]', FLAM_PW);
   await page.click('input[type="submit"]');
-  await page.waitForURL('**/');
+  await page.waitForURL('**/', { timeout: 30000 });
   console.log('Logged in');
 
-  const START = '2025/05/01';
-  const END = '2026/04/30';
-  const S = encodeURIComponent(START);
-  const E = encodeURIComponent(END);
+  const S = '2025%2F05%2F01';
+  const E = '2026%2F04%2F30';
 
   console.log('=== Step 2: Download CSVs ===');
 
-  // 1. Dept + Month sales
-  await downloadCSV(page,
+  await downloadCSV(context, page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
+    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_sales.csv');
 
-  // 2. Dept + Customer sales
-  await downloadCSV(page,
+  await downloadCSV(context, page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&limit=20`,
+    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&file-format=csv`,
     'dept_customer_sales.csv');
 
-  // 3. Dept + Product + Month sales
-  await downloadCSV(page,
+  await downloadCSV(context, page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&limit=20`,
+    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_product_sales.csv');
 
-  // 4. Dept + Supplier + Month purchase
-  await downloadCSV(page,
+  await downloadCSV(context, page,
     `${FLAM_URL}/purchases/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
+    `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // 5. Orders
-  try {
-    await downloadCSV(page,
-      `${FLAM_URL}/orders/report/view/analysis?preview=1&rt=1&sd=${S}&ed=${E}&fi=`,
-      'orders.csv');
-  } catch (e) {
-    console.log('Orders download failed:', e.message);
-  }
+  await downloadCSV(context, page,
+    `${FLAM_URL}/orders/report/view/analysis?preview=1&rt=1&sd=${S}&ed=${E}&fi=`,
+    `${FLAM_URL}/orders/report/view/analysis/export?rt=1&sd=${S}&ed=${E}&fi=&file-format=csv`,
+    'orders.csv');
 
-  // 6. Stock
-  try {
-    await downloadCSV(page,
-      `${FLAM_URL}/stockrecents/export`,
-      'stockrecents.csv');
-  } catch (e) {
-    console.log('Stock download failed:', e.message);
-  }
+  await downloadCSV(context, page,
+    `${FLAM_URL}/stockrecents/export`,
+    `${FLAM_URL}/stockrecents/export/download?file-format=csv`,
+    'stockrecents.csv');
 
   await browser.close();
-  console.log('=== Browser closed ===');
+  console.log('=== Done ===');
 })();
