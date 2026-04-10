@@ -41,7 +41,13 @@ echo "=== Step 2: Download CSVs ==="
 START="2025%2F05%2F01"
 END="2026%2F04%2F30"
 
-curl -s -b "$COOKIE_JAR" "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" -o "$DATA_DIR/dept_sales.csv"
+# Debug: test first download with verbose headers
+echo "  Testing CSV URL..."
+curl -s -L -b "$COOKIE_JAR" -D /tmp/headers.txt "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv" -o "$DATA_DIR/dept_sales.csv"
+echo "  Response headers:"
+grep -i "content-type\|location\|HTTP/" /tmp/headers.txt
+echo "  File size: $(wc -c < "$DATA_DIR/dept_sales.csv") bytes"
+echo "  First 100 chars: $(head -c 100 "$DATA_DIR/dept_sales.csv")"
 echo "Downloaded: dept_sales"
 
 curl -s -b "$COOKIE_JAR" "$FLAM_URL/sales/totalize/export?startdate=$START&enddate=$END&grouping%5B%5D=customer&grouping%5B%5D=section&file-format=csv" -o "$DATA_DIR/dept_customer_sales.csv"
