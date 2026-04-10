@@ -2,9 +2,8 @@ name: Update DENKO Dashboard
 
 on:
   schedule:
-    # 毎朝6:00 JST (21:00 UTC前日) に実行
     - cron: '0 21 * * *'
-  workflow_dispatch: # 手動実行も可能
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -12,13 +11,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download from FLAM and build HTML
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Download from FLAM
         env:
           FLAM_ID: ${{ secrets.FLAM_ID }}
           FLAM_PW: ${{ secrets.FLAM_PW }}
-        run: |
-          chmod +x build.sh
-          bash build.sh
+        run: node download_flam.js
+
+      - name: Build HTML
+        run: bash build_html.sh
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
