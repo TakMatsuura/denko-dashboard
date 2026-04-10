@@ -218,7 +218,9 @@ function showTab(id, el) {
 }
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  // Remove BOM and normalize line endings
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = text.trim().split('\n').filter(l => l.trim());
   const headers = parseCSVLine(lines[0]);
   return lines.slice(1).map(line => {
     const vals = parseCSVLine(line);
