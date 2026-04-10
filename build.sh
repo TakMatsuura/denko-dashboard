@@ -15,12 +15,16 @@ echo "=== Step 1: Login to FLAM ==="
 curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$FLAM_URL/login" > /dev/null
 echo "  Got login page, cookies: $(cat "$COOKIE_JAR" | grep -v '^#' | wc -l) entries"
 
-# Step 1b: POST login (don't follow redirect, capture response)
+# Step 1b: POST login
 LOGIN_RESPONSE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
   -w "\nHTTP_CODE:%{http_code}\nREDIRECT:%{redirect_url}" \
-  --data-urlencode "data[User][loginid]=$FLAM_ID" \
-  --data-urlencode "data[User][password]=$FLAM_PW" \
-  "$FLAM_URL/login")
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "data[User][loginid]=${FLAM_ID}" \
+  --data-urlencode "data[User][password]=${FLAM_PW}" \
+  -X POST \
+  "$FLAM_URL/login" 2>&1)
+echo "  Response body size: $(echo "$LOGIN_RESPONSE" | wc -c) bytes"
+echo "  Contains 'login': $(echo "$LOGIN_RESPONSE" | grep -c 'loginid')"
 echo "  Login response: $(echo "$LOGIN_RESPONSE" | grep HTTP_CODE)"
 echo "  Redirect: $(echo "$LOGIN_RESPONSE" | grep REDIRECT)"
 echo "  Cookies after login: $(cat "$COOKIE_JAR" | grep -v '^#' | wc -l) entries"
