@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DENKO Sales Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --sf-blue: #DAA520;
+  --sf-dark: #8B6914;
+  --sf-navy: #6B5210;
+  --sf-light: #f3f3f3;
+  --sf-white: #ffffff;
+  --sf-border: #e5e5e5;
+  --sf-green: #2e844a;
+  --sf-red: #ea001e;
+  --sf-orange: #fe9339;
+  --sf-text: #181818;
+  --sf-muted: #706e6b;
+  --sf-card-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  --sf-radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Salesforce Sans', 'SF Pro Display', -apple-system, 'Segoe UI', 'Meiryo', sans-serif; background: var(--sf-light); color: var(--sf-text); font-size: 11px; }
+
+/* Navigation Bar - Salesforce style */
+.navbar { background: var(--sf-navy); height: 36px; display: flex; align-items: center; padding: 0 24px; gap: 24px; position: sticky; top: 0; z-index: 100; }
+.navbar .logo { color: #fff; font-size: 13px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+.navbar .logo svg { width: 24px; height: 24px; }
+.navbar .nav-tabs { display: flex; gap: 4px; height: 100%; }
+.navbar .nav-tab { color: rgba(255,255,255,0.7); padding: 0 10px; height: 100%; display: flex; align-items: center; font-size: 11px; font-weight: 500; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.15s; }
+.navbar .nav-tab:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.navbar .nav-tab.active { color: #fff; border-bottom-color: var(--sf-blue); }
+.navbar .nav-right { margin-left: auto; color: rgba(255,255,255,0.6); font-size: 12px; }
+
+/* Page Header */
+.page-header { background: var(--sf-white); border-bottom: 1px solid var(--sf-border); padding: 10px 16px; }
+.page-header h2 { font-size: 14px; font-weight: 700; color: var(--sf-dark); }
+.page-header .subtitle { font-size: 12px; color: var(--sf-muted); margin-top: 2px; }
+
+/* Content */
+.content { padding: 10px 16px; }
+.section { display: none; }
+.section.active { display: block; }
+
+/* KPI Row - Salesforce Lightning style */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.kpi-card { background: var(--sf-white); border: 1px solid var(--sf-border); border-radius: var(--sf-radius); padding: 10px 14px; box-shadow: var(--sf-card-shadow); position: relative; overflow: hidden; }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--sf-blue); }
+.kpi-card.green::before { background: var(--sf-green); }
+.kpi-card.orange::before { background: var(--sf-orange); }
+.kpi-card.red::before { background: var(--sf-red); }
+.kpi-card .kpi-label { font-size: 10px; font-weight: 600; color: var(--sf-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.kpi-card .kpi-value { font-size: 18px; font-weight: 700; color: var(--sf-dark); }
+.kpi-card .kpi-sub { font-size: 10px; color: var(--sf-muted); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.kpi-card .kpi-sub .up { color: var(--sf-green); font-weight: 600; }
+.kpi-card .kpi-sub .down { color: var(--sf-red); font-weight: 600; }
+
+/* Progress Bar */
+.progress-wrap { margin-top: 10px; }
+.progress-bar { height: 8px; background: #e0e5ee; border-radius: 4px; overflow: hidden; }
+.progress-bar .fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+.progress-bar .fill.blue { background: var(--sf-blue); }
+.progress-bar .fill.green { background: var(--sf-green); }
+.progress-bar .fill.orange { background: var(--sf-orange); }
+.progress-bar .fill.red { background: var(--sf-red); }
+.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--sf-muted); margin-top: 4px; }
+
+/* Chart Cards */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.card { background: var(--sf-white); border: 1px solid var(--sf-border); border-radius: var(--sf-radius); box-shadow: var(--sf-card-shadow); }
+.card.full { grid-column: 1 / -1; }
+.card-header { padding: 8px 12px; border-bottom: 1px solid var(--sf-border); display: flex; align-items: center; justify-content: space-between; }
+.card-header h3 { font-size: 12px; font-weight: 600; color: var(--sf-dark); }
+.card-header .badge { font-size: 11px; background: #fdf5e0; color: var(--sf-blue); padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.card-body { padding: 10px; }
+
+/* Tables - Lightning style */
+table { width: 100%; border-collapse: collapse; }
+th { font-size: 10px; font-weight: 600; color: var(--sf-muted); text-transform: uppercase; letter-spacing: 0.3px; padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--sf-border); background: #fafaf9; }
+td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; font-size: 11px; }
+tr:hover td { background: #f3f3f3; }
+.text-right { text-align: right; }
+.text-green { color: var(--sf-green); font-weight: 600; }
+.text-red { color: var(--sf-red); font-weight: 600; }
+
+/* Budget vs Actual mini bar */
+.mini-bar { display: inline-block; width: 60px; height: 6px; background: #e0e5ee; border-radius: 3px; vertical-align: middle; margin-left: 6px; }
+.mini-bar .mini-fill { height: 100%; border-radius: 3px; }
+
+/* Custom Legend Grid */
+.legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; font-size: 12px; flex: 1; }
+.legend-item { display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+/* Gauge Chart */
+.gauge-wrap { position: relative; text-align: center; padding-bottom: 10px; }
+.gauge-wrap canvas { max-height: 130px; margin-bottom: 30px; }
+.gauge-center { position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%); text-align: center; }
+.gauge-center .gauge-val { font-size: 20px; font-weight: 700; color: var(--sf-dark); }
+.gauge-center .gauge-pct { font-size: 11px; color: var(--sf-muted); }
+.gauge-footer { text-align: center; font-size: 10px; color: var(--sf-muted); margin-top: 2px; }
+.gauge-footer a { color: var(--sf-blue); text-decoration: none; font-weight: 500; }
+
+@media (max-width: 1000px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="navbar">
+  <div class="logo">
+    <img src="denko_logo.png" alt="DENKO" style="height:28px;border-radius:4px;filter:invert(1)">
+    Electric Industry Dept.
+  </div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="showTab('overview',this)">Overview</div>
+    <div class="nav-tab" onclick="showTab('budget',this)">Budget</div>
+    <div class="nav-tab" onclick="showTab('customers',this)">Customers</div>
+    <div class="nav-tab" onclick="showTab('orders',this)">Orders</div>
+    <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
+  </div>
+  <div class="nav-right">FY2025 (2025/05 - 2026/04)</div>
+</div>
+
+<!-- OVERVIEW -->
+<div id="overview" class="section active">
+  <div class="page-header"><h2>Performance Overview</h2><div class="subtitle">FY2025 Annual Performance Summary</div></div>
+  <div class="content">
+    <div class="kpi-row" id="kpi-overview"></div>
+    <div class="grid-3">
+      <div class="card"><div class="card-header"><h3>Annual Revenue</h3><div class="badge" id="gauge-revenue-badge"></div></div><div class="card-body"><div class="gauge-wrap"><canvas id="gauge-revenue"></canvas><div class="gauge-center" id="gauge-revenue-center"></div><div class="gauge-footer" id="gauge-revenue-footer"></div></div></div></div>
+      <div class="card"><div class="card-header"><h3>Gross Profit</h3><div class="badge" id="gauge-profit-badge"></div></div><div class="card-body"><div class="gauge-wrap"><canvas id="gauge-profit"></canvas><div class="gauge-center" id="gauge-profit-center"></div><div class="gauge-footer" id="gauge-profit-footer"></div></div></div></div>
+      <div class="card"><div class="card-header"><h3>Profit Margin</h3><div class="badge" id="gauge-margin-badge"></div></div><div class="card-body"><div class="gauge-wrap"><canvas id="gauge-margin"></canvas><div class="gauge-center" id="gauge-margin-center"></div><div class="gauge-footer" id="gauge-margin-footer"></div></div></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>Monthly Revenue vs Budget</h3></div><div class="card-body" style="height:280px"><canvas id="chart-budget-vs-actual"></canvas></div></div>
+      <div class="card full"><div class="card-header"><h3>Gross Profit Trend</h3></div><div class="card-body" style="height:220px"><canvas id="chart-profit"></canvas></div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card"><div class="card-header"><h3>Customer Mix (得意先別売上)</h3></div><div class="card-body" style="height:220px;display:flex;align-items:center;gap:8px"><div style="flex:0 0 160px;max-height:180px"><canvas id="chart-customer-pie"></canvas></div><div id="legend-customer" class="legend-grid"></div></div></div>
+      <div class="card"><div class="card-header"><h3>Supplier Mix (仕入先別仕入)</h3></div><div class="card-body" style="height:220px;display:flex;align-items:center;gap:8px"><div style="flex:0 0 160px;max-height:180px"><canvas id="chart-supplier-pie"></canvas></div><div id="legend-supplier" class="legend-grid"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- BUDGET VS ACTUAL -->
+<div id="budget" class="section">
+  <div class="page-header"><h2>Budget vs Actual</h2><div class="subtitle">Monthly budget tracking - Target: 7.2 billion yen</div></div>
+  <div class="content">
+    <div class="kpi-row" id="kpi-budget"></div>
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>Monthly Budget Achievement</h3></div><div class="card-body"><canvas id="chart-budget-monthly"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Cumulative Progress</h3></div><div class="card-body"><canvas id="chart-budget-cumulative"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Monthly Achievement Rate</h3></div><div class="card-body"><canvas id="chart-budget-rate"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Monthly Detail</h3></div><div class="card-body"><table id="table-budget"><thead><tr><th>Month</th><th class="text-right">Budget</th><th class="text-right">Actual</th><th class="text-right">Diff</th><th class="text-right">Rate</th><th>Progress</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="kpi-row" id="kpi-offices"></div>
+    <div class="grid-2">
+      <div class="card"><div class="card-header"><h3>Office Monthly Trend (拠点別推移)</h3></div><div class="card-body" style="height:220px"><canvas id="chart-office-trend"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Office Composition (拠点別構成)</h3></div><div class="card-body" style="height:220px;display:flex;align-items:center;gap:8px"><div style="flex:0 0 160px;max-height:180px"><canvas id="chart-office-pie"></canvas></div><div id="legend-office" class="legend-grid"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CUSTOMERS -->
+<div id="customers" class="section">
+  <div class="page-header"><h2>Customer Analysis</h2><div class="subtitle">得意先別の売上・利益分析</div></div>
+  <div class="content">
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:300px"><canvas id="chart-customer-rank"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Customer Detail</h3><div class="badge" id="customer-count"></div></div><div class="card-body"><table id="table-customers"><thead><tr><th>Code</th><th>Customer</th><th>Dept</th><th class="text-right">Net Sales</th><th class="text-right">Gross Profit</th><th class="text-right">Margin</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+
+<!-- PURCHASING -->
+<div id="purchase" class="section">
+  <div class="page-header"><h2>Purchasing Analysis</h2><div class="subtitle">Supplier performance and procurement trends</div></div>
+  <div class="content">
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>Top Supplier Monthly Trends</h3></div><div class="card-body"><canvas id="chart-purchase-monthly"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Supplier Ranking</h3></div><div class="card-body"><canvas id="chart-purchase-rank"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Monthly Order Count</h3></div><div class="card-body"><canvas id="chart-purchase-count"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Supplier Summary</h3></div><div class="card-body"><table id="table-purchase"><thead><tr><th>Code</th><th>Supplier</th><th class="text-right">Annual Amount</th><th class="text-right">Qty</th><th class="text-right">Orders</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+
+<!-- ORDERS -->
+<div id="orders" class="section">
+  <div class="page-header"><h2>Order Management</h2><div class="subtitle">受注状況・バックログ管理</div></div>
+  <div class="content">
+    <div class="kpi-row" id="kpi-orders"></div>
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>Monthly Order Trend</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-monthly"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Backlog by Customer (未完)</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>Order Status Breakdown</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-status"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div class="badge" id="order-count"></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+</div>
+
+<script>
+// Embedded CSV data - auto-generated
+// CSV_DATA_PLACEHOLDER
+// END_CSV_DATA_PLACEHOLDER
+</script>
+
+<script>
+const COLORS = ['#0176d3','#1b96ff','#3ba755','#fe9339','#9050e9','#04a9c9','#e8006f','#444','#c0392b','#16a085','#7f8c8d','#e67e22'];
+const BUDGET_ANNUAL = 720000000;
+const DENKI_DEPTS = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+
+function showTab(id, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  el.classList.add('active');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = parseCSVLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = parseCSVLine(line);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    return obj;
+  });
+}
+
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') inQuotes = !inQuotes;
+    else if (c === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else if (c !== '\r') current += c;
+  }
+  result.push(current.trim());
+  return result;
+}
+
+function fmt(n) { return isNaN(n) ? '0' : Math.round(n).toLocaleString('ja-JP'); }
+function fmtM(n) { return (n / 10000).toFixed(0) + '万'; }
+function fmtOku(n) {
+  if (Math.abs(n) >= 100000000) return (n / 100000000).toFixed(2) + '億';
+  return (n / 10000).toFixed(0) + '万';
+}
+function monthLabel(m) { return m.replace('/', '年') + '月'; }
+function progressColor(pct) { return pct >= 100 ? 'green' : pct >= 80 ? 'blue' : pct >= 50 ? 'orange' : 'red'; }
+
+async function loadData() {
+  let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText;
+  if (typeof CSV_DATA !== 'undefined') {
+    saleTotalText = CSV_DATA.saletotalization;
+    purchaseText = CSV_DATA.purchasetotalization;
+    stockText = CSV_DATA.stockrecents;
+    budgetText = CSV_DATA.budget;
+    customerSalesText = CSV_DATA.customer_sales;
+    deptSalesText = CSV_DATA.dept_sales;
+    ordersText = CSV_DATA.orders;
+  } else {
+    [saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText] = await Promise.all([
+      fetch('data/saletotalization.csv').then(r => r.text()),
+      fetch('data/purchasetotalization.csv').then(r => r.text()),
+      fetch('data/stockrecents.csv').then(r => r.text()),
+      fetch('data/budget.csv').then(r => r.text()),
+      fetch('data/customer_sales.csv').then(r => r.text()),
+      fetch('data/dept_sales.csv').then(r => r.text()),
+      fetch('data/orders.csv').then(r => r.text()),
+    ]);
+  }
+  const saleTotal = parseCSV(saleTotalText);
+  const purchase = parseCSV(purchaseText);
+  const stock = parseCSV(stockText);
+  const budget = parseCSV(budgetText);
+  const customerSales = parseCSV(customerSalesText);
+  const deptSales = parseCSV(deptSalesText);
+  const orders = parseCSV(ordersText);
+
+  // Filter customers to electric depts for order filtering
+  const denkiCustomerCodes = new Set(customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード'])).map(r => r['得意先コード']));
+  const denkiOrders = orders.filter(r => denkiCustomerCodes.has(r['得意先コード']));
+
+  buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
+  buildBudget(budget, deptSales);
+  buildCustomers(customerSales);
+  buildOrders(denkiOrders);
+  buildPurchase(purchase);
+}
+
+function drawGauge(canvasId, centerId, footerId, badgeId, value, target, label, unit) {
+  const pct = target > 0 ? Math.min(value / target * 100, 150) : 0;
+  const displayPct = target > 0 ? (value / target * 100).toFixed(1) : 0;
+  // Gauge segments: red 0-50%, orange 50-80%, yellow 80-100%, green 100%+
+  const segSize = 100;
+  const needle = Math.min(pct / 150 * segSize, segSize);
+  const remain = segSize - needle;
+  new Chart(document.getElementById(canvasId), {
+    type: 'doughnut',
+    data: {
+      datasets: [{
+        data: [30, 20, 20, 30, 50],
+        backgroundColor: ['#c23934','#e87040','#fe9339','#f2cf5b','#2e844a'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      circumference: 180, rotation: -90,
+      cutout: '75%',
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    },
+    plugins: [{
+      id: 'gaugeNeedle',
+      afterDraw(chart) {
+        const { ctx, chartArea } = chart;
+        const cx = (chartArea.left + chartArea.right) / 2;
+        const cy = chartArea.bottom - 25;
+        const r = (chartArea.right - chartArea.left) / 2 * 0.35;
+        const angle = Math.PI + (Math.PI * Math.min(pct, 150) / 150);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(0, -5);
+        ctx.lineTo(r, 0);
+        ctx.lineTo(0, 5);
+        ctx.fillStyle = '#333';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#333';
+        ctx.fill();
+        ctx.restore();
+      }
+    }]
+  });
+  document.getElementById(centerId).innerHTML = `<div class="gauge-val">${unit === '億' ? fmtOku(value) : displayPct + '%'}</div><div class="gauge-pct">(${displayPct}%)</div>`;
+  document.getElementById(footerId).innerHTML = `<span style="color:var(--sf-muted)">予算: </span><span style="font-weight:700;color:var(--sf-dark)">${unit === '億' ? fmtOku(target) : target + '%'}</span><span style="color:var(--sf-muted)"> / 残: </span><span style="font-weight:600;color:${value>=target?'var(--sf-green)':'var(--sf-red)'}">${unit === '億' ? (value>=target?'+':'') + fmtOku(value-target) : (parseFloat(displayPct)-100).toFixed(1) + '%'}</span>`;
+  document.getElementById(badgeId).textContent = parseFloat(displayPct) >= 100 ? 'On Track' : 'Behind';
+}
+
+function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
+  // Filter: 電力系部門のみ (DNK-E, DNK-E-N, DNK-E-S)
+  const denkiDepts = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+  const denkiData = deptSales.filter(r => denkiDepts.includes(r['部門コード']));
+  const totalSales = denkiData.reduce((s, r) => s + (parseFloat(r['純売上額']) || 0), 0);
+  const totalProfit = denkiData.reduce((s, r) => s + (parseFloat(r['粗利益']) || 0), 0);
+  const totalCost = denkiData.reduce((s, r) => s + (parseFloat(r['原価計']) || 0), 0);
+  const totalPurchase = purchase.reduce((s, r) => s + (parseFloat(r['純仕入額']) || 0), 0);
+  const profitRate = totalSales !== 0 ? (totalProfit / totalSales * 100).toFixed(1) : 0;
+  const achieveRate = (totalSales / BUDGET_ANNUAL * 100).toFixed(1);
+
+  // Gauge charts
+  drawGauge('gauge-revenue', 'gauge-revenue-center', 'gauge-revenue-footer', 'gauge-revenue-badge', totalSales, BUDGET_ANNUAL, 'Revenue', '億');
+  drawGauge('gauge-profit', 'gauge-profit-center', 'gauge-profit-footer', 'gauge-profit-badge', totalProfit, BUDGET_ANNUAL * 0.3, 'Profit', '億');
+  drawGauge('gauge-margin', 'gauge-margin-center', 'gauge-margin-footer', 'gauge-margin-badge', parseFloat(profitRate), 30, 'Margin', '%');
+
+  document.getElementById('kpi-overview').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Annual Revenue (電力系)</div><div class="kpi-value">${fmtOku(totalSales)}</div>
+      <div class="progress-wrap"><div class="progress-bar"><div class="fill ${progressColor(achieveRate)}" style="width:${Math.min(achieveRate,100)}%"></div></div>
+      <div class="progress-label"><span>Target: ${fmtOku(BUDGET_ANNUAL)}</span><span class="${parseFloat(achieveRate)>=100?'text-green':'text-red'}">${achieveRate}%</span></div></div></div>
+    <div class="kpi-card green"><div class="kpi-label">Gross Profit</div><div class="kpi-value">${fmtOku(totalProfit)}</div><div class="kpi-sub">Margin: <span class="up">${profitRate}%</span></div></div>
+    <div class="kpi-card orange"><div class="kpi-label">Total Purchasing</div><div class="kpi-value">${fmtOku(totalPurchase)}</div><div class="kpi-sub">${fmt(totalPurchase)}円</div></div>
+    <div class="kpi-card"><div class="kpi-label">Monthly Average</div><div class="kpi-value">${fmtOku(totalSales / 12)}</div><div class="kpi-sub">vs Budget: ${fmtOku(BUDGET_ANNUAL/12)}/月</div></div>
+  `;
+
+  // Budget vs Actual chart - 電力系部門の月別実績
+  const denkiMonthly = {};
+  denkiData.forEach(r => {
+    const m = r['集計年月'];
+    denkiMonthly[m] = (denkiMonthly[m] || 0) + (parseFloat(r['純売上額']) || 0);
+  });
+  const months = budget.map(b => b['月']);
+  const monthlyBudget = BUDGET_ANNUAL / 12;
+  new Chart(document.getElementById('chart-budget-vs-actual'), {
+    type: 'bar',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { label: 'Actual (電力系)', data: months.map(m => denkiMonthly[m] || 0), backgroundColor: months.map(m => (denkiMonthly[m] || 0) >= monthlyBudget ? '#3ba755cc' : '#DAA520cc'), barPercentage: 0.5, categoryPercentage: 0.6 },
+        { label: 'Budget', data: months.map(() => monthlyBudget), borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], type: 'line', fill: false, pointStyle: 'circle', pointRadius: 3, pointBackgroundColor: '#ea001e' },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Profit chart
+  const monthlyMap = {};
+  saleTotal.forEach(r => {
+    if (r['商品コード'] === '9999') return;
+    const m = r['集計年月'];
+    if (!monthlyMap[m]) monthlyMap[m] = { profit: 0 };
+    monthlyMap[m].profit += parseFloat(r['粗利益']) || 0;
+  });
+  const profitMonths = Object.keys(monthlyMap).sort();
+  new Chart(document.getElementById('chart-profit'), {
+    type: 'line',
+    data: {
+      labels: profitMonths.map(monthLabel),
+      datasets: [{ label: 'Gross Profit', data: profitMonths.map(m => monthlyMap[m]?.profit || 0), borderColor: '#3ba755', backgroundColor: '#3ba75522', fill: true, tension: 0.3 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Customer pie (得意先別売上)
+  const custSorted = customerSales
+    .map(r => [r['得意先名'], parseFloat(r['純売上額']) || 0])
+    .filter(r => r[1] > 0)
+    .sort((a,b) => b[1]-a[1]);
+  const custTop = custSorted.slice(0,10);
+  const custOther = custSorted.slice(10).reduce((s,e) => s+e[1], 0);
+  if (custOther > 0) custTop.push(['その他', custOther]);
+  new Chart(document.getElementById('chart-customer-pie'), {
+    type: 'doughnut',
+    data: { labels: custTop.map(s => s[0]), datasets: [{ data: custTop.map(s => s[1]), backgroundColor: COLORS }] },
+    options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } } }
+  });
+
+  // Supplier pie (仕入先別仕入)
+  const supplierTotals = {};
+  purchase.forEach(r => { supplierTotals[r['仕入先名']] = (supplierTotals[r['仕入先名']] || 0) + (parseFloat(r['純仕入額']) || 0); });
+  const sorted = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]);
+  const top = sorted.slice(0,7);
+  const other = sorted.slice(7).reduce((s,e) => s+e[1], 0);
+  if (other > 0) top.push(['その他', other]);
+  new Chart(document.getElementById('chart-supplier-pie'), {
+    type: 'doughnut',
+    data: { labels: top.map(s => s[0]), datasets: [{ data: top.map(s => s[1]), backgroundColor: COLORS }] },
+    options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } } }
+  });
+
+  // Custom HTML legends
+  document.getElementById('legend-customer').innerHTML = custTop.map((s,i) => `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`).join('');
+  document.getElementById('legend-supplier').innerHTML = top.map((s,i) => `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`).join('');
+}
+
+function buildBudget(budget, deptSales) {
+  // 電力系部門の月別実績をFLAMデータから算出
+  const denkiDepts = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+  const denkiMonthly = {};
+  const denkiProfitMonthly = {};
+  deptSales.filter(r => denkiDepts.includes(r['部門コード'])).forEach(r => {
+    const m = r['集計年月'];
+    denkiMonthly[m] = (denkiMonthly[m] || 0) + (parseFloat(r['純売上額']) || 0);
+    denkiProfitMonthly[m] = (denkiProfitMonthly[m] || 0) + (parseFloat(r['粗利益']) || 0);
+  });
+
+  const months = budget.map(b => b['月']);
+  const monthlyActuals = months.map(m => denkiMonthly[m] || 0);
+  const monthlyBudgets = months.map(b => parseFloat(budget.find(x => x['月'] === b)?.['売上予算']) || 0);
+
+  const totalBudget = monthlyBudgets.reduce((s, v) => s + v, 0);
+  const totalActual = monthlyActuals.reduce((s, v) => s + v, 0);
+  const achieveRate = (totalActual / totalBudget * 100).toFixed(1);
+  const totalProfit = Object.values(denkiProfitMonthly).reduce((s, v) => s + v, 0);
+  const avgMargin = totalActual > 0 ? (totalProfit / totalActual * 100).toFixed(1) : 0;
+  const bestIdx = monthlyActuals.indexOf(Math.max(...monthlyActuals));
+
+  document.getElementById('kpi-budget').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Annual Budget</div><div class="kpi-value">${fmtOku(totalBudget)}</div>
+      <div class="progress-wrap"><div class="progress-bar"><div class="fill ${progressColor(achieveRate)}" style="width:${Math.min(achieveRate,100)}%"></div></div>
+      <div class="progress-label"><span>Achieved: ${fmtOku(totalActual)}</span><span class="${parseFloat(achieveRate)>=100?'text-green':'text-red'}">${achieveRate}%</span></div></div></div>
+    <div class="kpi-card green"><div class="kpi-label">Gap to Target</div><div class="kpi-value ${totalActual>=totalBudget?'text-green':'text-red'}">${totalActual>=totalBudget?'+':''}${fmtOku(totalActual - totalBudget)}</div><div class="kpi-sub">${totalActual>=totalBudget?'Over target':'Under target'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg Profit Margin</div><div class="kpi-value">${avgMargin}%</div></div>
+    <div class="kpi-card orange"><div class="kpi-label">Best Month</div><div class="kpi-value">${monthLabel(months[bestIdx])}</div><div class="kpi-sub">${fmtOku(monthlyActuals[bestIdx])}</div></div>
+  `;
+
+  // Monthly budget chart
+  new Chart(document.getElementById('chart-budget-monthly'), {
+    type: 'bar',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { label: 'Actual (電力系)', data: monthlyActuals, backgroundColor: monthlyActuals.map((v, i) => v >= monthlyBudgets[i] ? '#3ba755cc' : '#DAA520cc'), barPercentage: 0.5, categoryPercentage: 0.6 },
+        { label: 'Budget', data: monthlyBudgets, type: 'line', borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], fill: false, pointStyle: 'circle', pointRadius: 4, pointBackgroundColor: '#ea001e' },
+      ]
+    },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Cumulative chart
+  let cumBudget = 0, cumActual = 0;
+  const cumBudgets = [], cumActuals = [];
+  months.forEach((m, i) => {
+    cumBudget += monthlyBudgets[i];
+    cumActual += monthlyActuals[i];
+    cumBudgets.push(cumBudget);
+    cumActuals.push(cumActual);
+  });
+  new Chart(document.getElementById('chart-budget-cumulative'), {
+    type: 'line',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { label: 'Cumulative Actual', data: cumActuals, borderColor: '#DAA520', backgroundColor: '#DAA52022', fill: true, tension: 0.3 },
+        { label: 'Cumulative Budget', data: cumBudgets, borderColor: '#ea001e', borderDash: [6,3], fill: false, tension: 0 },
+      ]
+    },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+  });
+
+  // Achievement rate chart
+  new Chart(document.getElementById('chart-budget-rate'), {
+    type: 'bar',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [{
+        label: 'Achievement %',
+        data: monthlyActuals.map((v, i) => monthlyBudgets[i] > 0 ? (v / monthlyBudgets[i] * 100).toFixed(1) : 0),
+        backgroundColor: monthlyActuals.map((v, i) => { const r = monthlyBudgets[i] > 0 ? v / monthlyBudgets[i] * 100 : 0; return r >= 100 ? '#3ba755cc' : r >= 80 ? '#DAA520cc' : '#fe9339cc'; }),
+      }]
+    },
+    options: { responsive: true, scales: { y: { min: 0, max: 200, ticks: { callback: v => v + '%' } } } }
+  });
+
+  // Budget table
+  const tbody = document.querySelector('#table-budget tbody');
+  months.forEach((m, i) => {
+    const bv = monthlyBudgets[i];
+    const av = monthlyActuals[i];
+    const diff = av - bv;
+    const rate = bv > 0 ? (av / bv * 100).toFixed(1) : 0;
+    const color = progressColor(rate);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${monthLabel(m)}</td><td class="text-right">${fmt(bv)}</td><td class="text-right" style="font-weight:600">${fmt(av)}</td>
+      <td class="text-right ${diff>=0?'text-green':'text-red'}">${diff>=0?'+':''}${fmt(diff)}</td>
+      <td class="text-right" style="font-weight:600">${rate}%</td>
+      <td><div class="mini-bar"><div class="mini-fill ${color}" style="width:${Math.min(rate,100)}%"></div></div></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Office breakdown
+  const officeNames = {'DNK-E': '本社', 'DNK-E-N': '名古屋', 'DNK-E-S': '仙台'};
+  const officeTotals = {};
+  const officeMonthly = {};
+  deptSales.filter(r => DENKI_DEPTS.includes(r['部門コード'])).forEach(r => {
+    const code = r['部門コード'];
+    const m = r['集計年月'];
+    officeTotals[code] = (officeTotals[code]||0) + (parseFloat(r['純売上額'])||0);
+    if (!officeMonthly[code]) officeMonthly[code] = {};
+    officeMonthly[code][m] = (officeMonthly[code][m]||0) + (parseFloat(r['純売上額'])||0);
+  });
+  const grandTotal = Object.values(officeTotals).reduce((s,v) => s+v, 0);
+
+  document.getElementById('kpi-offices').innerHTML = DENKI_DEPTS.map((code,i) => {
+    const v = officeTotals[code]||0;
+    const pct = grandTotal > 0 ? (v/grandTotal*100).toFixed(1) : 0;
+    const colors = ['','green','orange'];
+    return `<div class="kpi-card ${colors[i]}"><div class="kpi-label">${officeNames[code]}</div><div class="kpi-value">${fmtOku(v)}</div><div class="kpi-sub">Share: ${pct}%</div></div>`;
+  }).join('');
+
+  // Office monthly trend
+  const offMonths = [...new Set(deptSales.filter(r => DENKI_DEPTS.includes(r['部門コード'])).map(r => r['集計年月']))].sort();
+  const offColors = ['#DAA520','#3ba755','#0176d3'];
+  new Chart(document.getElementById('chart-office-trend'), {
+    type: 'line',
+    data: { labels: offMonths.map(monthLabel), datasets: DENKI_DEPTS.map((code,i) => ({ label: officeNames[code], data: offMonths.map(m => officeMonthly[code]?.[m]||0), borderColor: offColors[i], tension: 0.3, fill: false })) },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Office composition donut
+  const offEntries = DENKI_DEPTS.map((code,i) => [officeNames[code], officeTotals[code]||0]);
+  new Chart(document.getElementById('chart-office-pie'), {
+    type: 'doughnut',
+    data: { labels: offEntries.map(e => e[0]), datasets: [{ data: offEntries.map(e => e[1]), backgroundColor: offColors }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+  });
+  document.getElementById('legend-office').innerHTML = offEntries.map((e,i) => `<div class="legend-item"><span class="legend-dot" style="background:${offColors[i]}"></span>${e[0]}: ${fmtOku(e[1])}</div>`).join('');
+}
+
+function buildCustomers(customerSales) {
+  const filtered = customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  const sorted = filtered.sort((a, b) => (parseFloat(b['純売上額'])||0) - (parseFloat(a['純売上額'])||0));
+  document.getElementById('customer-count').textContent = sorted.length + ' customers';
+  const top15 = sorted.slice(0, 15);
+  new Chart(document.getElementById('chart-customer-rank'), {
+    type: 'bar',
+    data: { labels: top15.map(r => r['得意先名'].substring(0,20)), datasets: [{ label: 'Net Sales', data: top15.map(r => parseFloat(r['純売上額'])||0), backgroundColor: '#DAA520cc' }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+  });
+  const tbody = document.querySelector('#table-customers tbody');
+  sorted.forEach(r => {
+    const tr = document.createElement('tr');
+    const margin = parseFloat(r['粗利率'])||0;
+    tr.innerHTML = `<td>${r['得意先コード']}</td><td>${r['得意先名'].substring(0,30)}</td><td>${r['部門名']}</td>
+      <td class="text-right">${fmt(parseFloat(r['純売上額']))}</td>
+      <td class="text-right">${fmt(parseFloat(r['粗利益']))}</td>
+      <td class="text-right ${margin>=30?'text-green':margin<10?'text-red':''}">${margin.toFixed(1)}%</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildPurchase(purchase) {
+  const supplierMonthly = {}, allMonths = new Set(), supplierTotals = {};
+  purchase.forEach(r => {
+    const name = r['仕入先名'], m = r['集計年月'];
+    allMonths.add(m);
+    if (!supplierMonthly[name]) supplierMonthly[name] = {};
+    supplierMonthly[name][m] = (supplierMonthly[name][m]||0) + (parseFloat(r['純仕入額'])||0);
+    supplierTotals[name] = (supplierTotals[name]||0) + (parseFloat(r['純仕入額'])||0);
+  });
+  const topNames = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]).slice(0,6).map(e => e[0]);
+  const months = [...allMonths].sort();
+  new Chart(document.getElementById('chart-purchase-monthly'), {
+    type: 'line',
+    data: { labels: months.map(monthLabel), datasets: topNames.map((n,i) => ({ label: n, data: months.map(m => supplierMonthly[n]?.[m]||0), borderColor: COLORS[i], tension: 0.3, fill: false })) },
+    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+  const sortedAll = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]).slice(0,15);
+  new Chart(document.getElementById('chart-purchase-rank'), {
+    type: 'bar',
+    data: { labels: sortedAll.map(s => s[0].substring(0,15)), datasets: [{ data: sortedAll.map(s => s[1]), backgroundColor: '#e8006fcc' }] },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+  });
+  const monthlyCount = {};
+  purchase.forEach(r => { const m = r['集計年月']; monthlyCount[m] = (monthlyCount[m]||0) + (parseInt(r['明細数'])||0); });
+  new Chart(document.getElementById('chart-purchase-count'), {
+    type: 'bar',
+    data: { labels: months.map(monthLabel), datasets: [{ label: 'Orders', data: months.map(m => monthlyCount[m]||0), backgroundColor: '#fe9339cc' }] },
+    options: { responsive: true }
+  });
+  const agg = {};
+  purchase.forEach(r => {
+    const c = r['仕入先コード'];
+    if (!agg[c]) agg[c] = { code: c, name: r['仕入先名'], amount: 0, qty: 0, count: 0 };
+    agg[c].amount += parseFloat(r['純仕入額'])||0; agg[c].qty += parseFloat(r['純仕入数'])||0; agg[c].count += parseInt(r['明細数'])||0;
+  });
+  const tbody = document.querySelector('#table-purchase tbody');
+  Object.values(agg).sort((a,b) => b.amount-a.amount).forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.code}</td><td>${r.name}</td><td class="text-right">${fmt(r.amount)}</td><td class="text-right">${fmt(r.qty)}</td><td class="text-right">${fmt(r.count)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildOrders(orders) {
+  const totalAmount = orders.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
+  const orderNums = new Set(orders.map(r => r['受注番号']));
+  const backlog = orders.filter(r => r['引当/計上'] !== '完了');
+  const completed = orders.filter(r => r['引当/計上'] === '完了');
+  const backlogAmount = backlog.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
+  const completedAmount = completed.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
+
+  document.getElementById('kpi-orders').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Total Orders (YTD)</div><div class="kpi-value">${fmtOku(totalAmount)}</div><div class="kpi-sub">${fmt(orderNums.size)} orders</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Completed (完了)</div><div class="kpi-value">${fmtOku(completedAmount)}</div><div class="kpi-sub">${completed.length} items</div></div>
+    <div class="kpi-card orange"><div class="kpi-label">Backlog (未完)</div><div class="kpi-value">${fmtOku(backlogAmount)}</div><div class="kpi-sub">${backlog.length} items</div></div>
+    <div class="kpi-card"><div class="kpi-label">Completion Rate</div><div class="kpi-value">${totalAmount>0?(completedAmount/totalAmount*100).toFixed(1):'0'}%</div></div>
+  `;
+
+  // Monthly order trend
+  const monthlyOrders = {};
+  orders.forEach(r => {
+    const m = (r['受注日']||'').substring(0,7).replace('-','/');
+    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (parseFloat(r['明細小計'])||0);
+  });
+  const months = Object.keys(monthlyOrders).sort();
+  new Chart(document.getElementById('chart-order-monthly'), {
+    type: 'bar',
+    data: { labels: months.map(monthLabel), datasets: [{ label: 'Order Amount', data: months.map(m => monthlyOrders[m]||0), backgroundColor: '#DAA520cc', barPercentage: 0.5 }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Backlog by customer
+  const backlogByCustomer = {};
+  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (parseFloat(r['明細小計'])||0); });
+  const blSorted = Object.entries(backlogByCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
+  new Chart(document.getElementById('chart-order-backlog'), {
+    type: 'bar',
+    data: { labels: blSorted.map(s => s[0].substring(0,15)), datasets: [{ data: blSorted.map(s => s[1]), backgroundColor: '#fe9339cc' }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Order status pie
+  const statusMap = {};
+  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (parseFloat(r['明細小計'])||0); });
+  const statEntries = Object.entries(statusMap);
+  new Chart(document.getElementById('chart-order-status'), {
+    type: 'doughnut',
+    data: { labels: statEntries.map(s => s[0]), datasets: [{ data: statEntries.map(s => s[1]), backgroundColor: ['#3ba755','#DAA520','#fe9339','#ea001e'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } } }
+  });
+
+  // Order table (aggregate by order number, show most recent first)
+  document.getElementById('order-count').textContent = orderNums.size + ' orders';
+  const orderAgg = {};
+  orders.forEach(r => {
+    const num = r['受注番号'];
+    if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r['得意先名称'], amount: 0, status: r['引当/計上'] };
+    orderAgg[num].amount += parseFloat(r['明細小計'])||0;
+  });
+  const tbody = document.querySelector('#table-orders tbody');
+  Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
+    const tr = document.createElement('tr');
+    const stClass = r.status === '完了' ? 'text-green' : 'text-red';
+    tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td>${r.customer.substring(0,20)}</td>
+      <td class="text-right">${fmt(r.amount)}</td><td class="${stClass}">${r.status}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+loadData();
+</script>
+</body>
+</html>

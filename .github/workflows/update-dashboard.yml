@@ -1,0 +1,30 @@
+name: Update DENKO Dashboard
+
+on:
+  schedule:
+    # 毎朝6:00 JST (21:00 UTC前日) に実行
+    - cron: '0 21 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download from FLAM and build HTML
+        env:
+          FLAM_ID: ${{ secrets.FLAM_ID }}
+          FLAM_PW: ${{ secrets.FLAM_PW }}
+        run: |
+          chmod +x build.sh
+          bash build.sh
+
+      - name: Deploy to Netlify
+        uses: nwtgck/actions-netlify@v3
+        with:
+          publish-dir: './public'
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
