@@ -13,7 +13,7 @@ mkdir -p "$DATA_DIR"
 echo "=== Step 1: Login to FLAM ==="
 curl -s -c "$COOKIE_JAR" "$FLAM_URL/login" > /dev/null
 curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-  -d "data[User][email]=$FLAM_ID&data[User][password]=$FLAM_PW" \
+  -d "data[User][loginid]=$FLAM_ID&data[User][password]=$FLAM_PW" \
   -L "$FLAM_URL/login" > /dev/null
 echo "Logged in"
 
