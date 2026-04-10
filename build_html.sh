@@ -23,6 +23,9 @@ for f in "$DATA_DIR"/*.csv; do
 done
 
 echo "=== Build HTML ==="
+# Fix line endings in template
+sed -i 's/\r$//' "$TEMPLATE"
+
 TMPDATA="/tmp/csv_data_block.txt"
 
 echo "<script>" > "$TMPDATA"
@@ -55,3 +58,8 @@ sed -n '/\/\/ END_CSV_DATA_PLACEHOLDER/,$p' "$TEMPLATE" | tail -n +2 >> "$OUTPUT
 
 echo "=== Build complete ==="
 echo "Output: $OUTPUT ($(wc -l < "$OUTPUT") lines)"
+# Debug: check if CSV_DATA is in the output
+echo "  Contains CSV_DATA: $(grep -c 'const CSV_DATA' "$OUTPUT")"
+echo "  Contains script tags: $(grep -c '</script>' "$OUTPUT")"
+echo "  Line around CSV_DATA:"
+grep -n "CSV_DATA\|<script>" "$OUTPUT" | head -5
