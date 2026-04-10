@@ -13,14 +13,23 @@ async function downloadCSV(page, searchUrl, filename) {
   await page.goto(searchUrl, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
-  // Click download button to open menu
-  await page.locator('#btn_download').click({ force: true });
-  await page.waitForTimeout(1500);
+  // Use JavaScript to directly trigger download via the page's own mechanism
+  // First, make the dropdown visible, then click CSV
+  await page.evaluate(() => {
+    const menu = document.querySelector('.pulldown_extract, .pulldown, .additional');
+    if (menu) menu.style.display = 'block';
+    const allMenus = document.querySelectorAll('[class*="pulldown"]');
+    allMenus.forEach(m => m.style.display = 'block');
+  });
+  await page.waitForTimeout(500);
 
-  // Click CSV option and wait for download
+  // Click CSV link
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60000 }),
-    page.locator('a[data-format="csv"]').first().click({ force: true }),
+    page.evaluate(() => {
+      const csvLink = document.querySelector('a[data-format="csv"]');
+      if (csvLink) csvLink.click();
+    }),
   ]);
 
   const filePath = path.join(DATA_DIR, filename);
