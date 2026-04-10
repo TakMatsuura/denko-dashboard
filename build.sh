@@ -11,11 +11,27 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$DATA_DIR"
 
 echo "=== Step 1: Login to FLAM ==="
-curl -s -c "$COOKIE_JAR" "$FLAM_URL/login" > /dev/null
-curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-  -d "data[User][loginid]=$FLAM_ID&data[User][password]=$FLAM_PW" \
-  -L "$FLAM_URL/login" > /dev/null
+# Step 1a: Get login page and cookies
+curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" "$FLAM_URL/login" > /dev/null
+echo "  Got login page, cookies: $(cat "$COOKIE_JAR" | grep -v '^#' | wc -l) entries"
+
+# Step 1b: POST login (don't follow redirect, capture response)
+LOGIN_RESPONSE=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
+  -w "\nHTTP_CODE:%{http_code}\nREDIRECT:%{redirect_url}" \
+  --data-urlencode "data[User][loginid]=$FLAM_ID" \
+  --data-urlencode "data[User][password]=$FLAM_PW" \
+  "$FLAM_URL/login")
+echo "  Login response: $(echo "$LOGIN_RESPONSE" | grep HTTP_CODE)"
+echo "  Redirect: $(echo "$LOGIN_RESPONSE" | grep REDIRECT)"
+echo "  Cookies after login: $(cat "$COOKIE_JAR" | grep -v '^#' | wc -l) entries"
+
+# Step 1c: Follow redirect to complete login
+curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" -L "$FLAM_URL/" > /dev/null
 echo "Logged in"
+
+# Step 1d: Verify login by checking if we can access a page
+VERIFY=$(curl -s -b "$COOKIE_JAR" -o /dev/null -w "%{http_code}" "$FLAM_URL/sales/totalize")
+echo "  Verify access: HTTP $VERIFY"
 
 echo "=== Step 2: Download CSVs ==="
 START="2025%2F05%2F01"
