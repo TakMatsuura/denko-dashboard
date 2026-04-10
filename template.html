@@ -254,11 +254,11 @@ function progressColor(pct) { return pct >= 100 ? 'green' : pct >= 80 ? 'blue' :
 async function loadData() {
   let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText;
   if (typeof CSV_DATA !== 'undefined') {
-    saleTotalText = CSV_DATA.saletotalization;
-    purchaseText = CSV_DATA.purchasetotalization;
+    saleTotalText = CSV_DATA.dept_product_sales;
+    purchaseText = CSV_DATA.dept_purchase;
     stockText = CSV_DATA.stockrecents;
     budgetText = CSV_DATA.budget;
-    customerSalesText = CSV_DATA.customer_sales;
+    customerSalesText = CSV_DATA.dept_customer_sales;
     deptSalesText = CSV_DATA.dept_sales;
     ordersText = CSV_DATA.orders;
   } else {
