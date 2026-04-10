@@ -8,13 +8,18 @@ OUTPUT="$SCRIPT_DIR/public/index.html"
 
 echo "=== Convert encoding ==="
 for f in "$DATA_DIR"/*.csv; do
-  if file "$f" | grep -qi "shift\|iso-8859\|Non-ISO"; then
-    iconv -f SHIFT_JIS -t UTF-8 "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-    echo "  Converted: $(basename $f)"
+  # Always try Shift-JIS first, fall back to keeping as-is
+  if iconv -f SHIFT_JIS -t UTF-8 "$f" > "$f.tmp" 2>/dev/null; then
+    mv "$f.tmp" "$f"
+    echo "  Converted SJIS->UTF8: $(basename $f) ($(wc -c < "$f") bytes)"
   else
-    sed -i '1s/^\xEF\xBB\xBF//' "$f" 2>/dev/null || true
-    echo "  OK: $(basename $f) ($(wc -c < "$f") bytes)"
+    rm -f "$f.tmp"
+    echo "  Kept as-is: $(basename $f) ($(wc -c < "$f") bytes)"
   fi
+  # Remove BOM
+  sed -i '1s/^\xEF\xBB\xBF//' "$f" 2>/dev/null || true
+  # Show first line for debug
+  echo "  Header: $(head -c 100 "$f")"
 done
 
 echo "=== Build HTML ==="
@@ -25,6 +30,11 @@ echo "const CSV_DATA = {" >> "$TMPDATA"
 
 for key in dept_product_sales dept_purchase stockrecents dept_customer_sales dept_sales orders; do
   if [ -f "$DATA_DIR/$key.csv" ]; then
+    # Skip files that are HTML (not CSV)
+    if head -c 20 "$DATA_DIR/$key.csv" | grep -qi "<!DOCTYPE\|<html"; then
+      echo "  SKIPPED: $key (HTML, not CSV)"
+      continue
+    fi
     echo "$key: \`" >> "$TMPDATA"
     sed 's/`//g' "$DATA_DIR/$key.csv" >> "$TMPDATA"
     echo "\`," >> "$TMPDATA"
