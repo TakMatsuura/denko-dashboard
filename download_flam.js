@@ -19,17 +19,18 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
   const cookies = await context.cookies();
   const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-  // Step 3: Fetch export URL using page.evaluate (same session)
+  // Step 3: Fetch export URL and get as binary array (for Shift-JIS decoding)
   const response = await page.evaluate(async (url) => {
     const res = await fetch(url, { credentials: 'include' });
-    const text = await res.text();
-    return { status: res.status, contentType: res.headers.get('content-type'), length: text.length, text: text };
+    const buffer = await res.arrayBuffer();
+    const bytes = Array.from(new Uint8Array(buffer));
+    return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes };
   }, exportUrl);
 
   console.log(`  Export response: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
 
   const filePath = path.join(DATA_DIR, filename);
-  fs.writeFileSync(filePath, response.text);
+  fs.writeFileSync(filePath, Buffer.from(response.bytes));
   console.log(`Downloaded: ${filename} (${response.length} bytes)`);
 }
 
