@@ -9,14 +9,17 @@ const DATA_DIR = '/tmp/flam_data';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-async function downloadCSV(page, searchUrl, downloadSelector, filename) {
+async function downloadCSV(page, searchUrl, filename) {
   await page.goto(searchUrl, { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
+  // Click download button to open menu
+  await page.click('#btn_download');
+  await page.waitForTimeout(1000);
+
+  // Click CSV option and wait for download
   const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.click(downloadSelector),
-    page.waitForTimeout(500),
+    page.waitForEvent('download', { timeout: 60000 }),
     page.click('a[data-format="csv"]'),
   ]);
 
@@ -50,51 +53,37 @@ async function downloadCSV(page, searchUrl, downloadSelector, filename) {
   // 1. Dept + Month sales
   await downloadCSV(page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
-    '#btn_download', 'dept_sales.csv');
+    'dept_sales.csv');
 
   // 2. Dept + Customer sales
   await downloadCSV(page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&limit=20`,
-    '#btn_download', 'dept_customer_sales.csv');
+    'dept_customer_sales.csv');
 
   // 3. Dept + Product + Month sales
   await downloadCSV(page,
     `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&limit=20`,
-    '#btn_download', 'dept_product_sales.csv');
+    'dept_product_sales.csv');
 
   // 4. Dept + Supplier + Month purchase
   await downloadCSV(page,
     `${FLAM_URL}/purchases/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
-    '#btn_download', 'dept_purchase.csv');
+    'dept_purchase.csv');
 
   // 5. Orders
   try {
-    await page.goto(`${FLAM_URL}/orders/report/view/analysis?preview=1&rt=1&sd=${S}&ed=${E}&fi=`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(2000);
-    const [dlOrders] = await Promise.all([
-      page.waitForEvent('download'),
-      page.click('#btn_download'),
-      page.waitForTimeout(500),
-      page.click('a[data-format="csv"]'),
-    ]);
-    await dlOrders.saveAs(path.join(DATA_DIR, 'orders.csv'));
-    console.log(`Downloaded: orders.csv (${fs.statSync(path.join(DATA_DIR, 'orders.csv')).size} bytes)`);
+    await downloadCSV(page,
+      `${FLAM_URL}/orders/report/view/analysis?preview=1&rt=1&sd=${S}&ed=${E}&fi=`,
+      'orders.csv');
   } catch (e) {
     console.log('Orders download failed:', e.message);
   }
 
   // 6. Stock
   try {
-    await page.goto(`${FLAM_URL}/stockrecents/export`, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
-    const [dlStock] = await Promise.all([
-      page.waitForEvent('download'),
-      page.click('#btn_download'),
-      page.waitForTimeout(500),
-      page.click('a[data-format="csv"]'),
-    ]);
-    await dlStock.saveAs(path.join(DATA_DIR, 'stockrecents.csv'));
-    console.log(`Downloaded: stockrecents.csv (${fs.statSync(path.join(DATA_DIR, 'stockrecents.csv')).size} bytes)`);
+    await downloadCSV(page,
+      `${FLAM_URL}/stockrecents/export`,
+      'stockrecents.csv');
   } catch (e) {
     console.log('Stock download failed:', e.message);
   }
