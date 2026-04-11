@@ -109,6 +109,50 @@ tr:hover td { background: #f3f3f3; }
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="display:flex; justify-content:center; align-items:center; height:100vh; background:linear-gradient(135deg, #6B5210 0%, #DAA520 50%, #8B6914 100%);">
+  <div style="background:#fff; border-radius:12px; padding:40px 36px; box-shadow:0 8px 32px rgba(0,0,0,0.2); width:360px; text-align:center;">
+    <div style="margin-bottom:24px;">
+      <div style="font-size:28px; font-weight:800; color:#6B5210; letter-spacing:1px;">⚡ DENKO</div>
+      <div style="font-size:12px; color:#706e6b; margin-top:4px;">Sales Dashboard Login</div>
+    </div>
+    <div style="margin-bottom:16px; text-align:left;">
+      <label style="font-size:11px; font-weight:600; color:#706e6b; text-transform:uppercase; letter-spacing:0.5px;">User ID</label>
+      <input id="login-id" type="text" placeholder="IDを入力" style="width:100%; padding:10px 12px; border:1px solid #e5e5e5; border-radius:6px; font-size:14px; margin-top:4px; outline:none; transition:border 0.2s;" onfocus="this.style.borderColor='#DAA520'" onblur="this.style.borderColor='#e5e5e5'">
+    </div>
+    <div style="margin-bottom:24px; text-align:left;">
+      <label style="font-size:11px; font-weight:600; color:#706e6b; text-transform:uppercase; letter-spacing:0.5px;">Password</label>
+      <input id="login-pw" type="password" placeholder="パスワードを入力" style="width:100%; padding:10px 12px; border:1px solid #e5e5e5; border-radius:6px; font-size:14px; margin-top:4px; outline:none; transition:border 0.2s;" onfocus="this.style.borderColor='#DAA520'" onblur="this.style.borderColor='#e5e5e5'" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button onclick="doLogin()" style="width:100%; padding:12px; background:#DAA520; color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; transition:background 0.2s; letter-spacing:0.5px;" onmouseover="this.style.background='#8B6914'" onmouseout="this.style.background='#DAA520'">ログイン</button>
+    <div id="login-error" style="color:#ea001e; font-size:12px; margin-top:12px; display:none;">IDまたはパスワードが違います</div>
+  </div>
+</div>
+<script>
+const DASHBOARD_ID = 'denko';
+const DASHBOARD_PW = 'denki2025';
+function doLogin() {
+  const id = document.getElementById('login-id').value;
+  const pw = document.getElementById('login-pw').value;
+  if (id === DASHBOARD_ID && pw === DASHBOARD_PW) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard-main').style.display = 'block';
+    sessionStorage.setItem('denko-auth', '1');
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+if (sessionStorage.getItem('denko-auth') === '1') {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard-main').style.display = 'block';
+  });
+}
+</script>
+
+<!-- DASHBOARD MAIN (hidden until login) -->
+<div id="dashboard-main" style="display:none;">
+
 <div class="navbar">
   <div class="logo">
     <img src="denko_logo.png" alt="DENKO" style="height:28px;border-radius:4px;filter:invert(1)">
@@ -707,5 +751,6 @@ function buildOrders(orders) {
 
 loadData();
 </script>
+</div><!-- end dashboard-main -->
 </body>
 </html>
