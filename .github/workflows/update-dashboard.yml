@@ -28,7 +28,7 @@ jobs:
         run: node download_flam.js
 
       - name: Build HTML
-        run: bash build_html.sh
+        run: node build_html.js
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
