@@ -112,8 +112,8 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       console.log(`  Found ${tableData.length} tables`);
       tableData.forEach((t, i) => console.log(`    Table ${i}: ${t.length} rows x ${t[0].length} cols, header: ${t[0].slice(0,5).join(' | ')}...`));
 
-      // Use the largest table (should be the orders data)
-      const dataTables = tableData.filter(t => t.length > 3);
+      // Use the table with ~18 cols (data table), not 70 cols (search form)
+      const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 30);
       if (dataTables.length > 0) {
         const table = dataTables.sort((a, b) => b.length - a.length)[0];
         if (!headers) {
