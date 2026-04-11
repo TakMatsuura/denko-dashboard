@@ -215,6 +215,12 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="grid-2">
       <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:420px"><canvas id="chart-customer-rank"></canvas></div></div>
     </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>得意先別 変圧器/その他 売上構成</h3><div class="subtitle">Top 10 customers - Transformer vs Other products</div></div>
+      <div class="card-body">
+        <div id="customer-pie-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px;"></div>
+      </div>
+    </div>
     <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Customer Detail</h3><div class="badge" id="customer-count"></div></div><div class="card-body"><table id="table-customers"><thead><tr><th>Code</th><th>Customer</th><th>Dept</th><th class="text-right">Net Sales</th><th class="text-right">Gross Profit</th><th class="text-right">Margin</th></tr></thead><tbody></tbody></table></div></div>
   </div>
 </div>
@@ -299,7 +305,7 @@ function monthLabel(m) { return m.replace('/', '年') + '月'; }
 function progressColor(pct) { return pct >= 100 ? 'green' : pct >= 80 ? 'blue' : pct >= 50 ? 'orange' : 'red'; }
 
 async function loadData() {
-  let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText;
+  let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText, custProductText;
   if (typeof CSV_DATA !== 'undefined') {
     saleTotalText = CSV_DATA.dept_product_sales || '';
     purchaseText = CSV_DATA.dept_purchase || '';
@@ -308,6 +314,7 @@ async function loadData() {
     customerSalesText = CSV_DATA.dept_customer_sales || '';
     deptSalesText = CSV_DATA.dept_sales || '';
     ordersText = CSV_DATA.orders || '';
+    custProductText = CSV_DATA.customer_product_sales || '';
   } else {
     [saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText] = await Promise.all([
       fetch('data/saletotalization.csv').then(r => r.text()),
@@ -318,6 +325,7 @@ async function loadData() {
       fetch('data/dept_sales.csv').then(r => r.text()),
       fetch('data/orders.csv').then(r => r.text()),
     ]);
+    custProductText = '';
   }
   const saleTotal = parseCSV(saleTotalText);
   const purchase = parseCSV(purchaseText);
@@ -326,11 +334,12 @@ async function loadData() {
   const customerSales = parseCSV(customerSalesText);
   const deptSales = parseCSV(deptSalesText);
   const orders = parseCSV(ordersText);
+  const custProduct = parseCSV(custProductText);
 
   // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
   buildBudget(budget, deptSales);
-  buildCustomers(customerSales);
+  buildCustomers(customerSales, custProduct);
   buildOrders(orders);
   buildPurchase(purchase);
 }
@@ -616,7 +625,7 @@ function buildBudget(budget, deptSales) {
   document.getElementById('legend-office').innerHTML = offEntries.map((e,i) => `<div class="legend-item"><span class="legend-dot" style="background:${offColors[i]}"></span>${e[0]}: ${fmtOku(e[1])}</div>`).join('');
 }
 
-function buildCustomers(customerSales) {
+function buildCustomers(customerSales, custProduct) {
   const filtered = customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード']));
   const sorted = filtered.sort((a, b) => (parseFloat(b['純売上額'])||0) - (parseFloat(a['純売上額'])||0));
   document.getElementById('customer-count').textContent = sorted.length + ' customers';
@@ -626,6 +635,59 @@ function buildCustomers(customerSales) {
     data: { labels: top15.map(r => r['得意先名']), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
   });
+
+  // === Customer × Product pie charts (変圧器 vs その他) ===
+  if (custProduct && custProduct.length > 0) {
+    const cpFiltered = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+    // Aggregate per customer: 変圧器 vs その他
+    const custMap = {};
+    cpFiltered.forEach(r => {
+      const name = r['得意先名'];
+      const sales = toNum(r['純売上額']);
+      if (!sales || sales <= 0) return;
+      if (!custMap[name]) custMap[name] = { trans: 0, other: 0, total: 0 };
+      // 商品名 に「変圧器」が含まれれば変圧器、それ以外はその他
+      const productName = r['商品名'] || r['商品コード'] || '';
+      if (productName.includes('変圧器')) {
+        custMap[name].trans += sales;
+      } else {
+        custMap[name].other += sales;
+      }
+      custMap[name].total += sales;
+    });
+    // Sort by total sales, take top 10
+    const topCust = Object.entries(custMap)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10);
+
+    const grid = document.getElementById('customer-pie-grid');
+    topCust.forEach(([name, data], idx) => {
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'text-align:center;';
+      const transPct = data.total > 0 ? (data.trans / data.total * 100).toFixed(0) : 0;
+      wrapper.innerHTML = `
+        <div style="font-weight:600; font-size:11px; margin-bottom:4px; line-height:1.3; min-height:28px;">${name}</div>
+        <canvas id="cust-pie-${idx}" style="max-height:140px;"></canvas>
+        <div style="font-size:10px; color:#666; margin-top:2px;">変圧器 ${transPct}% / ${fmtM(data.total)}</div>`;
+      grid.appendChild(wrapper);
+      new Chart(document.getElementById(`cust-pie-${idx}`), {
+        type: 'doughnut',
+        data: {
+          labels: ['変圧器', 'その他'],
+          datasets: [{ data: [data.trans, data.other], backgroundColor: ['#DAA520', '#888'] }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtM(ctx.raw)} (${(ctx.raw/data.total*100).toFixed(0)}%)` } }
+          }
+        }
+      });
+    });
+  }
+
   const tbody = document.querySelector('#table-customers tbody');
   sorted.forEach(r => {
     const tr = document.createElement('tr');
