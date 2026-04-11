@@ -213,7 +213,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   <div class="page-header"><h2>Customer Analysis</h2><div class="subtitle">得意先別の売上・利益分析</div></div>
   <div class="content">
     <div class="grid-2">
-      <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:300px"><canvas id="chart-customer-rank"></canvas></div></div>
+      <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:420px"><canvas id="chart-customer-rank"></canvas></div></div>
     </div>
     <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Customer Detail</h3><div class="badge" id="customer-count"></div></div><div class="card-body"><table id="table-customers"><thead><tr><th>Code</th><th>Customer</th><th>Dept</th><th class="text-right">Net Sales</th><th class="text-right">Gross Profit</th><th class="text-right">Margin</th></tr></thead><tbody></tbody></table></div></div>
   </div>
@@ -623,7 +623,7 @@ function buildCustomers(customerSales) {
   const top15 = sorted.slice(0, 15);
   new Chart(document.getElementById('chart-customer-rank'), {
     type: 'bar',
-    data: { labels: top15.map(r => r['得意先名'].substring(0,20)), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
+    data: { labels: top15.map(r => r['得意先名']), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
   });
   const tbody = document.querySelector('#table-customers tbody');
@@ -741,7 +741,7 @@ function buildOrders(orders) {
   Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
     const tr = document.createElement('tr');
     const stClass = r.status === '完了' ? 'text-green' : 'text-red';
-    tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td>${r.customer.substring(0,20)}</td>
+    tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td>${r.customer}</td>
       <td class="text-right">${fmt(r.amount)}</td><td class="${stClass}">${r.status}</td>`;
     tbody.appendChild(tr);
   });
