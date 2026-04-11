@@ -42,12 +42,14 @@ for (const key of keys) {
     continue;
   }
   let content = fs.readFileSync(filePath, 'utf8');
-  // Skip HTML files (not CSV)
-  if (content.trimStart().startsWith('<!DOCTYPE') || content.trimStart().startsWith('<html')) {
-    console.log(`  SKIPPED (HTML): ${key}`);
+  // Skip HTML/XML files (not CSV)
+  const trimmed = content.trimStart();
+  if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<?xml')) {
+    console.log(`  SKIPPED (HTML/XML): ${key}`);
     continue;
   }
-  content = content.replace(/`/g, '');
+  // Remove backticks and </script> tags that would break the template literal
+  content = content.replace(/`/g, '').replace(/<\/script>/gi, '');
   const lines = content.split('\n').length;
   csvDataBlock += `${key}: \`\n${content}\n\`,\n`;
   console.log(`  Embedded: ${key} (${lines} lines)`);
