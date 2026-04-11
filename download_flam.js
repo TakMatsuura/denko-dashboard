@@ -156,11 +156,39 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       });
 
       console.log(`  Found ${tableData.length} tables with data`);
+      // Debug: show all tables info
+      tableData.forEach((t, i) => {
+        console.log(`  Table ${i}: ${t.length} rows x ${t[0].length} cols`);
+        console.log(`    Headers: ${t[0].join(' | ')}`);
+        if (t.length > 1) {
+          console.log(`    Row1 cols: ${t[1].length}`);
+          console.log(`    Row1: ${t[1].join(' | ')}`);
+        }
+        if (t.length > 2) {
+          console.log(`    Row2: ${t[2].join(' | ')}`);
+        }
+      });
+
       if (tableData.length > 0) {
         // Convert the largest table to CSV
         const biggest = tableData.sort((a, b) => b.length - a.length)[0];
-        console.log(`  Largest table: ${biggest.length} rows x ${biggest[0].length} cols`);
-        console.log(`  Headers: ${biggest[0].join(', ')}`);
+        const headerCount = biggest[0].length;
+        console.log(`  Using table: ${biggest.length} rows x ${headerCount} cols`);
+
+        // Check if header row has fewer cells than data (colspan issue)
+        if (biggest.length > 1 && biggest[1].length !== headerCount) {
+          console.log(`  WARNING: Header has ${headerCount} cols but data has ${biggest[1].length} cols!`);
+        }
+
+        // Show header-to-value mapping for first data row
+        if (biggest.length > 1) {
+          const dataRow = biggest[1];
+          console.log('  Column mapping (sample):');
+          for (let i = 0; i < Math.max(headerCount, dataRow.length); i++) {
+            console.log(`    [${i}] "${biggest[0][i] || '???'}" = "${(dataRow[i] || '').substring(0, 30)}"`);
+          }
+        }
+
         const csvContent = biggest.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
         fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), csvContent, 'utf8');
         console.log(`Downloaded (scraped): orders.csv (${csvContent.length} bytes, ${biggest.length} rows)`);
