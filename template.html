@@ -652,7 +652,7 @@ function buildCustomers(customerSales, custProduct) {
       if (!sales || sales <= 0) return;
       if (!custMap[name]) custMap[name] = { trans: 0, other: 0, total: 0 };
       // 商品分類2名 (or similar column) = 変圧器 classification from FLAM master
-      const className = r['商品分類2名'] || r['商品分類名'] || r['商品分類2'] || r['分類2'] || '';
+      const className = r['商品分類名2'] || '';
       if (className.includes('変圧器')) {
         custMap[name].trans += sales;
       } else {
