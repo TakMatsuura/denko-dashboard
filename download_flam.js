@@ -67,16 +67,11 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_product_sales.csv');
 
-  // Try productclass grouping (商品分類別 = 変圧器 vs others)
+  // productclass2 grouping (分類2 = 変圧器 vs others)
   await downloadCSV(context, page,
-    `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass&limit=20`,
-    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass&file-format=csv`,
+    `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass2&limit=20`,
+    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass2&file-format=csv`,
     'customer_productclass_sales.csv');
-
-  await downloadCSV(context, page,
-    `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=product&limit=20`,
-    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=product&file-format=csv`,
-    'customer_product_sales.csv');
 
   await downloadCSV(context, page,
     `${FLAM_URL}/purchases/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
@@ -230,47 +225,20 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
-  // Discover: log available grouping options from the totalize form
+  // Log productclass2 CSV headers (after SJIS conversion in build_html.js)
   try {
-    console.log('=== Totalize grouping options ===');
-    await page.goto(`${FLAM_URL}/sales/totalize`, { waitUntil: 'networkidle', timeout: 30000 });
-    const groupingOptions = await page.evaluate(() => {
-      const results = [];
-      // Check select elements for grouping options
-      document.querySelectorAll('select').forEach(sel => {
-        if (sel.name && sel.name.includes('grouping')) {
-          const options = Array.from(sel.options).map(o => ({ value: o.value, text: o.textContent.trim() }));
-          results.push({ name: sel.name, options });
-        }
-      });
-      // Also check checkboxes
-      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        if (cb.name && cb.name.includes('grouping')) {
-          results.push({ name: cb.name, value: cb.value, type: 'checkbox' });
-        }
-      });
-      return results;
-    });
-    console.log(`  Grouping options: ${JSON.stringify(groupingOptions)}`);
-
-    // Also check productclass CSV result
     const pcPath = path.join(DATA_DIR, 'customer_productclass_sales.csv');
     if (fs.existsSync(pcPath)) {
       const content = fs.readFileSync(pcPath);
       const preview = content.toString('utf8').substring(0, 500);
-      const trimmed = preview.trimStart();
-      if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html') || trimmed.startsWith('<?xml')) {
-        console.log('  customer_productclass_sales.csv is HTML (grouping=productclass failed)');
-      } else {
-        const firstLine = preview.split('\n')[0];
-        console.log(`  productclass CSV headers: ${firstLine}`);
-        if (preview.split('\n').length > 1) {
-          console.log(`  productclass CSV row1: ${preview.split('\n')[1].substring(0, 200)}`);
-        }
+      const firstLine = preview.split('\n')[0];
+      console.log(`  productclass2 CSV headers: ${firstLine.substring(0, 300)}`);
+      if (preview.split('\n').length > 1) {
+        console.log(`  productclass2 CSV row1: ${preview.split('\n')[1].substring(0, 200)}`);
       }
     }
   } catch (e) {
-    console.log(`  Grouping discovery failed: ${e.message}`);
+    console.log(`  CSV check failed: ${e.message}`);
   }
 
   await browser.close();
