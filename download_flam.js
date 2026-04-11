@@ -93,51 +93,42 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       });
       console.log(`  ${dept}: ${resultInfo}`);
 
-      // Scrape the table, handling checkboxes and links properly
+      // Scrape ALL tables (same approach as analysis page that worked)
       const tableData = await page.evaluate(() => {
-        const table = document.querySelector('table.list, table.index, table');
-        if (!table) return null;
-
-        const rows = Array.from(table.querySelectorAll('tr'));
-        if (rows.length < 2) return null;
-
-        // Get headers
-        const headerRow = rows[0];
-        const headerCells = Array.from(headerRow.querySelectorAll('th'));
-        const headers = headerCells.map(th => th.textContent.trim());
-
-        // Get data rows
-        const dataRows = [];
-        for (let i = 1; i < rows.length; i++) {
-          const cells = Array.from(rows[i].querySelectorAll('td'));
-          if (cells.length >= 5) {
-            const row = cells.map(td => td.textContent.trim().replace(/\s+/g, ' '));
-            dataRows.push(row);
+        const tables = document.querySelectorAll('table');
+        const results = [];
+        for (const table of tables) {
+          const rows = Array.from(table.querySelectorAll('tr'));
+          if (rows.length > 1) {
+            const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+            if (data.length > 0 && data[0].length > 3) {
+              results.push(data);
+            }
           }
         }
-        return { headers, rows: dataRows, totalRows: rows.length };
+        return results;
       });
 
-      if (tableData && tableData.rows.length > 0) {
+      console.log(`  Found ${tableData.length} tables`);
+      tableData.forEach((t, i) => console.log(`    Table ${i}: ${t.length} rows x ${t[0].length} cols, header: ${t[0].slice(0,5).join(' | ')}...`));
+
+      // Use the largest table (should be the orders data)
+      const dataTables = tableData.filter(t => t.length > 3);
+      if (dataTables.length > 0) {
+        const table = dataTables.sort((a, b) => b.length - a.length)[0];
         if (!headers) {
-          headers = tableData.headers;
+          headers = table[0];
           console.log(`  Headers (${headers.length}): ${headers.join(' | ')}`);
-          // Show first data row for debugging
-          if (tableData.rows.length > 0) {
-            console.log(`  Row0 (${tableData.rows[0].length} cols): ${tableData.rows[0].join(' | ')}`);
+          if (table.length > 1) {
+            console.log(`  Row0 (${table[1].length} cols): ${table[1].join(' | ')}`);
           }
         }
-        allRows = allRows.concat(tableData.rows);
-        console.log(`  ${dept}: ${tableData.rows.length} data rows`);
+        // Add data rows (skip header)
+        const dataRows = table.slice(1);
+        allRows = allRows.concat(dataRows);
+        console.log(`  ${dept}: ${dataRows.length} data rows`);
       } else {
-        console.log(`  ${dept}: no table data found`);
-
-        // Fallback: show page info for debugging
-        const debugInfo = await page.evaluate(() => {
-          const tables = document.querySelectorAll('table');
-          return { tableCount: tables.length, bodyLength: document.body.innerText.length, title: document.title };
-        });
-        console.log(`  Debug: ${JSON.stringify(debugInfo)}`);
+        console.log(`  ${dept}: no usable table found`);
       }
     }
 
