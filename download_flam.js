@@ -224,57 +224,84 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
-  // Product Master: scrape to get product code → classification mapping
+  // Product Master: find correct URL and scrape product code → classification mapping
   try {
     console.log('=== Product Master ===');
-    // Try products list page with large limit
-    await page.goto(`${FLAM_URL}/products?limit=10000`, { waitUntil: 'networkidle', timeout: 60000 });
-    await page.waitForTimeout(3000);
 
-    // Log page URL and title
-    const pageUrl = page.url();
-    const pageTitle = await page.title();
-    console.log(`  Page URL: ${pageUrl}, Title: ${pageTitle}`);
+    // Step 1: Find product-related links from FLAM navigation
+    await page.goto(`${FLAM_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
+    const navLinks = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('a'))
+        .map(a => ({ text: a.textContent.trim().substring(0, 30), href: a.href }))
+        .filter(l => l.href && (l.text.includes('商品') || l.href.includes('product')));
+    });
+    console.log(`  Product-related links: ${JSON.stringify(navLinks)}`);
 
-    // Scrape ALL tables
-    const tableData = await page.evaluate(() => {
-      const tables = document.querySelectorAll('table');
-      const results = [];
-      for (const table of tables) {
-        const rows = Array.from(table.querySelectorAll('tr'));
-        if (rows.length > 1) {
-          const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
-          if (data.length > 0 && data[0].length > 2) {
-            results.push(data);
+    // Step 2: Try multiple candidate URLs
+    const candidateUrls = [
+      '/products/view/',
+      '/products/index',
+      '/products/',
+      '/masters/products',
+      '/items/view/',
+      '/items/',
+    ];
+    // Add any URLs found from nav
+    navLinks.forEach(l => {
+      try {
+        const urlPath = new URL(l.href).pathname;
+        if (!candidateUrls.includes(urlPath)) candidateUrls.unshift(urlPath);
+      } catch (e) {}
+    });
+
+    let productPageFound = false;
+    for (const urlPath of candidateUrls) {
+      try {
+        const fullUrl = `${FLAM_URL}${urlPath}?limit=10000`;
+        console.log(`  Trying: ${fullUrl}`);
+        await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 15000 });
+        const title = await page.title();
+        console.log(`    Title: ${title}`);
+        if (title.includes('エラー') || title.includes('404')) continue;
+
+        // Scrape tables
+        const tableData = await page.evaluate(() => {
+          const tables = document.querySelectorAll('table');
+          const results = [];
+          for (const table of tables) {
+            const rows = Array.from(table.querySelectorAll('tr'));
+            if (rows.length > 1) {
+              const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+              if (data.length > 0 && data[0].length > 2) results.push(data);
+            }
           }
+          return results;
+        });
+
+        console.log(`    Found ${tableData.length} tables`);
+        tableData.forEach((t, i) => {
+          console.log(`    Table ${i}: ${t.length} rows x ${t[0].length} cols`);
+          console.log(`      Headers: ${t[0].join(' | ')}`);
+          if (t.length > 1) console.log(`      Row1: ${t[1].slice(0, 10).join(' | ')}`);
+        });
+
+        const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 50);
+        if (dataTables.length > 0) {
+          const table = dataTables.sort((a, b) => b.length - a.length)[0];
+          console.log(`    Using: ${table.length} rows x ${table[0].length} cols`);
+          const csvContent = table.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+          fs.writeFileSync(path.join(DATA_DIR, 'product_master.csv'), csvContent, 'utf8');
+          console.log(`Downloaded: product_master.csv (${table.length} rows)`);
+          productPageFound = true;
+          break;
         }
+      } catch (e) {
+        console.log(`    Failed: ${e.message.substring(0, 80)}`);
       }
-      return results;
-    });
+    }
 
-    console.log(`  Found ${tableData.length} tables`);
-    tableData.forEach((t, i) => {
-      console.log(`  Table ${i}: ${t.length} rows x ${t[0].length} cols`);
-      console.log(`    Headers: ${t[0].join(' | ')}`);
-      if (t.length > 1) console.log(`    Row1: ${t[1].slice(0, 10).join(' | ')}`);
-      if (t.length > 2) console.log(`    Row2: ${t[2].slice(0, 10).join(' | ')}`);
-    });
-
-    // Find data table (not search form - filter by col count < 30)
-    const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 30);
-    if (dataTables.length > 0) {
-      const table = dataTables.sort((a, b) => b.length - a.length)[0];
-      console.log(`  Using table: ${table.length} rows x ${table[0].length} cols`);
-      console.log(`  All headers: ${table[0].join(' | ')}`);
-
-      const csvContent = table.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
-      fs.writeFileSync(path.join(DATA_DIR, 'product_master.csv'), csvContent, 'utf8');
-      console.log(`Downloaded: product_master.csv (${table.length} rows, ${csvContent.length} bytes)`);
-    } else {
-      console.log('  No suitable data table found');
-      // Log page text snippet for debugging
-      const bodySnippet = await page.evaluate(() => document.body.innerText.substring(0, 500));
-      console.log(`  Page snippet: ${bodySnippet.substring(0, 300)}`);
+    if (!productPageFound) {
+      console.log('  WARNING: Could not find product master page');
     }
   } catch (e) {
     console.log(`  Product master download failed: ${e.message}`);
