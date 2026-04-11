@@ -17486,6 +17486,7 @@ function parseCSVLine(line) {
   return result;
 }
 
+function num(s) { return parseFloat((s||'0').toString().replace(/,/g, '')) || 0; }
 function fmt(n) { return isNaN(n) ? '0' : Math.round(n).toLocaleString('ja-JP'); }
 function fmtM(n) { return (n / 10000).toFixed(0) + '万'; }
 function fmtOku(n) {
@@ -17591,10 +17592,10 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   // Filter: 電力系部門のみ (DNK-E, DNK-E-N, DNK-E-S)
   const denkiDepts = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
   const denkiData = deptSales.filter(r => denkiDepts.includes(r['部門コード']));
-  const totalSales = denkiData.reduce((s, r) => s + (parseFloat(r['純売上額']) || 0), 0);
-  const totalProfit = denkiData.reduce((s, r) => s + (parseFloat(r['粗利益']) || 0), 0);
-  const totalCost = denkiData.reduce((s, r) => s + (parseFloat(r['原価計']) || 0), 0);
-  const totalPurchase = purchase.reduce((s, r) => s + (parseFloat(r['純仕入額']) || 0), 0);
+  const totalSales = denkiData.reduce((s, r) => s + (num(r['純売上額'])), 0);
+  const totalProfit = denkiData.reduce((s, r) => s + (num(r['粗利益'])), 0);
+  const totalCost = denkiData.reduce((s, r) => s + (num(r['原価計'])), 0);
+  const totalPurchase = purchase.reduce((s, r) => s + (num(r['純仕入額'])), 0);
   const profitRate = totalSales !== 0 ? (totalProfit / totalSales * 100).toFixed(1) : 0;
   const achieveRate = (totalSales / BUDGET_ANNUAL * 100).toFixed(1);
 
@@ -17616,7 +17617,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   const denkiMonthly = {};
   denkiData.forEach(r => {
     const m = r['集計年月'];
-    denkiMonthly[m] = (denkiMonthly[m] || 0) + (parseFloat(r['純売上額']) || 0);
+    denkiMonthly[m] = (denkiMonthly[m] || 0) + (num(r['純売上額']));
   });
   const months = budget.map(b => b['月']);
   const monthlyBudget = BUDGET_ANNUAL / 12;
@@ -17638,7 +17639,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     if (r['商品コード'] === '9999') return;
     const m = r['集計年月'];
     if (!monthlyMap[m]) monthlyMap[m] = { profit: 0 };
-    monthlyMap[m].profit += parseFloat(r['粗利益']) || 0;
+    monthlyMap[m].profit += num(r['粗利益']);
   });
   const profitMonths = Object.keys(monthlyMap).sort();
   new Chart(document.getElementById('chart-profit'), {
@@ -17652,7 +17653,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
 
   // Customer pie (得意先別売上)
   const custSorted = customerSales
-    .map(r => [r['得意先名'], parseFloat(r['純売上額']) || 0])
+    .map(r => [r['得意先名'], num(r['純売上額'])])
     .filter(r => r[1] > 0)
     .sort((a,b) => b[1]-a[1]);
   const custTop = custSorted.slice(0,10);
@@ -17666,7 +17667,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
 
   // Supplier pie (仕入先別仕入)
   const supplierTotals = {};
-  purchase.forEach(r => { supplierTotals[r['仕入先名']] = (supplierTotals[r['仕入先名']] || 0) + (parseFloat(r['純仕入額']) || 0); });
+  purchase.forEach(r => { supplierTotals[r['仕入先名']] = (supplierTotals[r['仕入先名']] || 0) + (num(r['純仕入額'])); });
   const sorted = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]);
   const top = sorted.slice(0,7);
   const other = sorted.slice(7).reduce((s,e) => s+e[1], 0);
@@ -17689,13 +17690,13 @@ function buildBudget(budget, deptSales) {
   const denkiProfitMonthly = {};
   deptSales.filter(r => denkiDepts.includes(r['部門コード'])).forEach(r => {
     const m = r['集計年月'];
-    denkiMonthly[m] = (denkiMonthly[m] || 0) + (parseFloat(r['純売上額']) || 0);
-    denkiProfitMonthly[m] = (denkiProfitMonthly[m] || 0) + (parseFloat(r['粗利益']) || 0);
+    denkiMonthly[m] = (denkiMonthly[m] || 0) + (num(r['純売上額']));
+    denkiProfitMonthly[m] = (denkiProfitMonthly[m] || 0) + (num(r['粗利益']));
   });
 
   const months = budget.map(b => b['月']);
   const monthlyActuals = months.map(m => denkiMonthly[m] || 0);
-  const monthlyBudgets = months.map(b => parseFloat(budget.find(x => x['月'] === b)?.['売上予算']) || 0);
+  const monthlyBudgets = months.map(b => num(budget.find(x => x['月'] === b)?.['売上予算']));
 
   const totalBudget = monthlyBudgets.reduce((s, v) => s + v, 0);
   const totalActual = monthlyActuals.reduce((s, v) => s + v, 0);
@@ -17784,9 +17785,9 @@ function buildBudget(budget, deptSales) {
   deptSales.filter(r => DENKI_DEPTS.includes(r['部門コード'])).forEach(r => {
     const code = r['部門コード'];
     const m = r['集計年月'];
-    officeTotals[code] = (officeTotals[code]||0) + (parseFloat(r['純売上額'])||0);
+    officeTotals[code] = (officeTotals[code]||0) + (num(r['純売上額']));
     if (!officeMonthly[code]) officeMonthly[code] = {};
-    officeMonthly[code][m] = (officeMonthly[code][m]||0) + (parseFloat(r['純売上額'])||0);
+    officeMonthly[code][m] = (officeMonthly[code][m]||0) + (num(r['純売上額']));
   });
   const grandTotal = Object.values(officeTotals).reduce((s,v) => s+v, 0);
 
@@ -17823,16 +17824,16 @@ function buildCustomers(customerSales) {
   const top15 = sorted.slice(0, 15);
   new Chart(document.getElementById('chart-customer-rank'), {
     type: 'bar',
-    data: { labels: top15.map(r => r['得意先名'].substring(0,20)), datasets: [{ label: 'Net Sales', data: top15.map(r => parseFloat(r['純売上額'])||0), backgroundColor: '#DAA520cc' }] },
+    data: { labels: top15.map(r => r['得意先名'].substring(0,20)), datasets: [{ label: 'Net Sales', data: top15.map(r => num(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
   });
   const tbody = document.querySelector('#table-customers tbody');
   sorted.forEach(r => {
     const tr = document.createElement('tr');
-    const margin = parseFloat(r['粗利率'])||0;
+    const margin = num(r['粗利率']);
     tr.innerHTML = `<td>${r['得意先コード']}</td><td>${r['得意先名'].substring(0,30)}</td><td>${r['部門名']}</td>
-      <td class="text-right">${fmt(parseFloat(r['純売上額']))}</td>
-      <td class="text-right">${fmt(parseFloat(r['粗利益']))}</td>
+      <td class="text-right">${fmt(num(r['純売上額']))}</td>
+      <td class="text-right">${fmt(num(r['粗利益']))}</td>
       <td class="text-right ${margin>=30?'text-green':margin<10?'text-red':''}">${margin.toFixed(1)}%</td>`;
     tbody.appendChild(tr);
   });
@@ -17844,8 +17845,8 @@ function buildPurchase(purchase) {
     const name = r['仕入先名'], m = r['集計年月'];
     allMonths.add(m);
     if (!supplierMonthly[name]) supplierMonthly[name] = {};
-    supplierMonthly[name][m] = (supplierMonthly[name][m]||0) + (parseFloat(r['純仕入額'])||0);
-    supplierTotals[name] = (supplierTotals[name]||0) + (parseFloat(r['純仕入額'])||0);
+    supplierMonthly[name][m] = (supplierMonthly[name][m]||0) + (num(r['純仕入額']));
+    supplierTotals[name] = (supplierTotals[name]||0) + (num(r['純仕入額']));
   });
   const topNames = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]).slice(0,6).map(e => e[0]);
   const months = [...allMonths].sort();
@@ -17871,7 +17872,7 @@ function buildPurchase(purchase) {
   purchase.forEach(r => {
     const c = r['仕入先コード'];
     if (!agg[c]) agg[c] = { code: c, name: r['仕入先名'], amount: 0, qty: 0, count: 0 };
-    agg[c].amount += parseFloat(r['純仕入額'])||0; agg[c].qty += parseFloat(r['純仕入数'])||0; agg[c].count += parseInt(r['明細数'])||0;
+    agg[c].amount += num(r['純仕入額']); agg[c].qty += num(r['純仕入数']); agg[c].count += parseInt(r['明細数'])||0;
   });
   const tbody = document.querySelector('#table-purchase tbody');
   Object.values(agg).sort((a,b) => b.amount-a.amount).forEach(r => {
@@ -17882,12 +17883,12 @@ function buildPurchase(purchase) {
 }
 
 function buildOrders(orders) {
-  const totalAmount = orders.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
+  const totalAmount = orders.reduce((s, r) => s + (num(r['明細小計'])), 0);
   const orderNums = new Set(orders.map(r => r['受注番号']));
   const backlog = orders.filter(r => r['引当/計上'] !== '完了');
   const completed = orders.filter(r => r['引当/計上'] === '完了');
-  const backlogAmount = backlog.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
-  const completedAmount = completed.reduce((s, r) => s + (parseFloat(r['明細小計'])||0), 0);
+  const backlogAmount = backlog.reduce((s, r) => s + (num(r['明細小計'])), 0);
+  const completedAmount = completed.reduce((s, r) => s + (num(r['明細小計'])), 0);
 
   document.getElementById('kpi-orders').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Total Orders (YTD)</div><div class="kpi-value">${fmtOku(totalAmount)}</div><div class="kpi-sub">${fmt(orderNums.size)} orders</div></div>
@@ -17900,7 +17901,7 @@ function buildOrders(orders) {
   const monthlyOrders = {};
   orders.forEach(r => {
     const m = (r['受注日']||'').substring(0,7).replace('-','/');
-    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (parseFloat(r['明細小計'])||0);
+    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (num(r['明細小計']));
   });
   const months = Object.keys(monthlyOrders).sort();
   new Chart(document.getElementById('chart-order-monthly'), {
@@ -17911,7 +17912,7 @@ function buildOrders(orders) {
 
   // Backlog by customer
   const backlogByCustomer = {};
-  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (parseFloat(r['明細小計'])||0); });
+  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (num(r['明細小計'])); });
   const blSorted = Object.entries(backlogByCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
   new Chart(document.getElementById('chart-order-backlog'), {
     type: 'bar',
@@ -17921,7 +17922,7 @@ function buildOrders(orders) {
 
   // Order status pie
   const statusMap = {};
-  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (parseFloat(r['明細小計'])||0); });
+  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (num(r['明細小計'])); });
   const statEntries = Object.entries(statusMap);
   new Chart(document.getElementById('chart-order-status'), {
     type: 'doughnut',
@@ -17935,7 +17936,7 @@ function buildOrders(orders) {
   orders.forEach(r => {
     const num = r['受注番号'];
     if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r['得意先名称'], amount: 0, status: r['引当/計上'] };
-    orderAgg[num].amount += parseFloat(r['明細小計'])||0;
+    orderAgg[num].amount += num(r['明細小計']);
   });
   const tbody = document.querySelector('#table-orders tbody');
   Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
