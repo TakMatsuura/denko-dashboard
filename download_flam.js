@@ -224,26 +224,63 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
-  // Product Master: download CSV export from FLAM (includes 分類2 for transformer classification)
+  // Product Master: scrape /products/view/ list page to get product code → classification
   try {
     console.log('=== Product Master ===');
-    await downloadCSV(context, page,
-      `${FLAM_URL}/products/view/?limit=20`,
-      `${FLAM_URL}/products/export?file-format=csv`,
-      'product_master.csv');
+    await page.goto(`${FLAM_URL}/products/view/?limit=10000`, { waitUntil: 'networkidle', timeout: 90000 });
+    await page.waitForTimeout(3000);
 
-    // Log CSV headers to verify 分類 columns exist
-    const pmPath = path.join(DATA_DIR, 'product_master.csv');
-    if (fs.existsSync(pmPath)) {
-      const pmContent = fs.readFileSync(pmPath);
-      // Try to decode first few lines (might be Shift-JIS)
-      const firstBytes = pmContent.slice(0, 2000);
-      const preview = firstBytes.toString('utf8');
-      const firstLine = preview.split('\n')[0];
-      console.log(`  CSV headers: ${firstLine.substring(0, 300)}`);
-      if (preview.split('\n').length > 1) {
-        console.log(`  Row1: ${preview.split('\n')[1].substring(0, 300)}`);
+    const title = await page.title();
+    console.log(`  Page title: ${title}`);
+
+    // Scrape tables
+    const tableData = await page.evaluate(() => {
+      const tables = document.querySelectorAll('table');
+      const results = [];
+      for (const table of tables) {
+        const rows = Array.from(table.querySelectorAll('tr'));
+        if (rows.length > 1) {
+          const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+          if (data.length > 0 && data[0].length > 2) results.push(data);
+        }
       }
+      return results;
+    });
+
+    console.log(`  Found ${tableData.length} tables`);
+    tableData.forEach((t, i) => {
+      console.log(`  Table ${i}: ${t.length} rows x ${t[0].length} cols`);
+      console.log(`    Headers: ${t[0].join(' | ')}`);
+      if (t.length > 1) console.log(`    Row1: ${t[1].slice(0, 15).join(' | ')}`);
+      if (t.length > 2) console.log(`    Row2: ${t[2].slice(0, 15).join(' | ')}`);
+    });
+
+    // Find data table (< 50 cols to exclude search form)
+    const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 50);
+    if (dataTables.length > 0) {
+      const table = dataTables.sort((a, b) => b.length - a.length)[0];
+      console.log(`  Using: ${table.length} rows x ${table[0].length} cols`);
+      console.log(`  ALL headers: ${table[0].join(' | ')}`);
+
+      // Check if 分類 columns exist
+      const classIdx = table[0].findIndex(h => h.includes('分類'));
+      console.log(`  分類 column index: ${classIdx}`);
+      if (classIdx >= 0 && table.length > 1) {
+        console.log(`  Sample 分類 values: ${table.slice(1, 6).map(r => r[classIdx]).join(', ')}`);
+      }
+
+      const csvContent = table.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+      fs.writeFileSync(path.join(DATA_DIR, 'product_master.csv'), csvContent, 'utf8');
+      console.log(`Downloaded: product_master.csv (${table.length} rows, ${csvContent.length} bytes)`);
+    } else {
+      console.log('  No suitable data table found on /products/view/');
+      // Get result count
+      const resultInfo = await page.evaluate(() => {
+        const text = document.body.innerText;
+        const match = text.match(/(\d+)\s*件/);
+        return match ? match[0] : 'unknown';
+      });
+      console.log(`  Result count: ${resultInfo}`);
     }
   } catch (e) {
     console.log(`  Product master download failed: ${e.message}`);
