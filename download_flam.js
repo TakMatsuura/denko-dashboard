@@ -72,65 +72,117 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Orders: scrape from analysis page per department (DNK-E, DNK-E-N, DNK-E-S)
+  // Orders: scrape from orders LIST page per department (sec= works here)
   try {
-    console.log('=== Orders: scraping per department ===');
+    console.log('=== Orders: scraping from list page per department ===');
     const departments = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
     let allRows = [];
     let headers = null;
 
     for (const dept of departments) {
-      console.log(`  Loading orders for dept: ${dept}`);
-      const url = `${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&sec=${encodeURIComponent(dept)}&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`;
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+      console.log(`  Loading orders list for dept: ${dept}`);
+      const url = `${FLAM_URL}/orders/view/?sd=2025%2F05%2F01&ed=&sec=${encodeURIComponent(dept)}&limit=10000`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
       await page.waitForTimeout(3000);
 
+      // Get result count from page
+      const resultInfo = await page.evaluate(() => {
+        const text = document.body.innerText;
+        const match = text.match(/(\d+)\s*件.*の検索結果/);
+        return match ? match[0] : 'unknown';
+      });
+      console.log(`  ${dept}: ${resultInfo}`);
+
+      // Scrape the table, handling checkboxes and links properly
       const tableData = await page.evaluate(() => {
-        const tables = document.querySelectorAll('table');
-        const results = [];
-        for (const table of tables) {
-          const rows = Array.from(table.querySelectorAll('tr'));
-          if (rows.length > 1) {
-            const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim()));
-            if (data.length > 0 && data[0].length > 2) {
-              results.push(data);
-            }
+        const table = document.querySelector('table.list, table.index, table');
+        if (!table) return null;
+
+        const rows = Array.from(table.querySelectorAll('tr'));
+        if (rows.length < 2) return null;
+
+        // Get headers
+        const headerRow = rows[0];
+        const headerCells = Array.from(headerRow.querySelectorAll('th'));
+        const headers = headerCells.map(th => th.textContent.trim());
+
+        // Get data rows
+        const dataRows = [];
+        for (let i = 1; i < rows.length; i++) {
+          const cells = Array.from(rows[i].querySelectorAll('td'));
+          if (cells.length >= 5) {
+            const row = cells.map(td => td.textContent.trim().replace(/\s+/g, ' '));
+            dataRows.push(row);
           }
         }
-        return results;
+        return { headers, rows: dataRows, totalRows: rows.length };
       });
 
-      // Find the data table (largest one)
-      const dataTables = tableData.filter(t => t.length > 5);
-      if (dataTables.length > 0) {
-        const table = dataTables.sort((a, b) => b.length - a.length)[0];
+      if (tableData && tableData.rows.length > 0) {
         if (!headers) {
-          headers = table[0];
-          console.log(`  Headers: ${headers.join(', ')}`);
+          headers = tableData.headers;
+          console.log(`  Headers (${headers.length}): ${headers.join(' | ')}`);
+          // Show first data row for debugging
+          if (tableData.rows.length > 0) {
+            console.log(`  Row0 (${tableData.rows[0].length} cols): ${tableData.rows[0].join(' | ')}`);
+          }
         }
-        // Add data rows (skip header row)
-        const dataRows = table.slice(1);
-        allRows = allRows.concat(dataRows);
-        console.log(`  ${dept}: ${dataRows.length} rows`);
+        allRows = allRows.concat(tableData.rows);
+        console.log(`  ${dept}: ${tableData.rows.length} data rows`);
       } else {
-        console.log(`  ${dept}: no data table found (${tableData.length} tables)`);
+        console.log(`  ${dept}: no table data found`);
+
+        // Fallback: show page info for debugging
+        const debugInfo = await page.evaluate(() => {
+          const tables = document.querySelectorAll('table');
+          return { tableCount: tables.length, bodyLength: document.body.innerText.length, title: document.title };
+        });
+        console.log(`  Debug: ${JSON.stringify(debugInfo)}`);
       }
     }
 
     if (headers && allRows.length > 0) {
       console.log(`  Total: ${allRows.length} rows across ${departments.length} depts`);
-      // Show sample row
-      if (allRows.length > 0) {
-        console.log('  Sample row:');
-        for (let i = 0; i < headers.length; i++) {
-          console.log(`    [${i}] "${headers[i]}" = "${(allRows[0][i] || '').substring(0, 30)}"`);
-        }
-      }
-      const csvContent = [headers, ...allRows].map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+
+      // Map column names: find key columns by name
+      const colMap = {};
+      headers.forEach((h, i) => { colMap[h] = i; });
+      console.log(`  Column indices: ${JSON.stringify(colMap)}`);
+
+      // Create normalized CSV with standard column names
+      // Map from list page columns to our expected format
+      const orderDateIdx = headers.findIndex(h => h.includes('受注日'));
+      const orderNumIdx = headers.findIndex(h => h.includes('受注番号'));
+      const customerIdx = headers.findIndex(h => h.includes('得意先'));
+      const amountIdx = headers.findIndex(h => h.includes('受注合計金額'));
+      const costIdx = headers.findIndex(h => h.includes('原価計'));
+      const statusIdx = headers.lastIndexOf('引当');
+
+      console.log(`  Key columns: 受注日=${orderDateIdx}, 受注番号=${orderNumIdx}, 得意先=${customerIdx}, 金額=${amountIdx}, 原価=${costIdx}, 引当=${statusIdx}`);
+
+      // Build CSV with normalized headers
+      const csvHeaders = ['受注日', '受注番号', '得意先名称', '受注合計金額', '原価計', '引当/計上'];
+      const csvRows = allRows.map(row => {
+        return [
+          row[orderDateIdx] || '',
+          row[orderNumIdx] || '',
+          row[customerIdx] || '',
+          row[amountIdx] || '0',
+          row[costIdx] || '0',
+          row[statusIdx] || '',
+        ];
+      });
+
+      const csvContent = [csvHeaders, ...csvRows].map(row => row.map(cell => `"${(cell||'').replace(/"/g, '""')}"`).join(',')).join('\n');
       fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), csvContent, 'utf8');
-      console.log(`Downloaded: orders.csv (${csvContent.length} bytes, ${allRows.length + 1} rows)`);
+      console.log(`Downloaded: orders.csv (${csvContent.length} bytes, ${csvRows.length + 1} rows)`);
+
+      // Show sample normalized row
+      if (csvRows.length > 0) {
+        console.log(`  Sample: ${csvHeaders.map((h, i) => `${h}="${csvRows[0][i]}"`).join(', ')}`);
+      }
     } else {
-      console.log('  WARNING: Could not get orders data from any department');
+      console.log('  WARNING: Could not get orders data');
     }
   } catch (e) {
     console.log(`  Orders download failed: ${e.message}`);

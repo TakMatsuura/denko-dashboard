@@ -682,12 +682,12 @@ function buildPurchase(purchase) {
 }
 
 function buildOrders(orders) {
-  const totalAmount = orders.reduce((s, r) => s + (toNum(r['明細小計'])), 0);
+  const totalAmount = orders.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
   const orderNums = new Set(orders.map(r => r['受注番号']));
   const backlog = orders.filter(r => r['引当/計上'] !== '完了');
   const completed = orders.filter(r => r['引当/計上'] === '完了');
-  const backlogAmount = backlog.reduce((s, r) => s + (toNum(r['明細小計'])), 0);
-  const completedAmount = completed.reduce((s, r) => s + (toNum(r['明細小計'])), 0);
+  const backlogAmount = backlog.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
+  const completedAmount = completed.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
 
   document.getElementById('kpi-orders').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Total Orders (YTD)</div><div class="kpi-value">${fmtOku(totalAmount)}</div><div class="kpi-sub">${fmt(orderNums.size)} orders</div></div>
@@ -700,7 +700,7 @@ function buildOrders(orders) {
   const monthlyOrders = {};
   orders.forEach(r => {
     const m = (r['受注日']||'').substring(0,7).replace('-','/');
-    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (toNum(r['明細小計']));
+    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (toNum(r['受注合計金額']));
   });
   const months = Object.keys(monthlyOrders).sort();
   new Chart(document.getElementById('chart-order-monthly'), {
@@ -711,7 +711,7 @@ function buildOrders(orders) {
 
   // Backlog by customer
   const backlogByCustomer = {};
-  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (toNum(r['明細小計'])); });
+  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (toNum(r['受注合計金額'])); });
   const blSorted = Object.entries(backlogByCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
   new Chart(document.getElementById('chart-order-backlog'), {
     type: 'bar',
@@ -721,7 +721,7 @@ function buildOrders(orders) {
 
   // Order status pie
   const statusMap = {};
-  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (toNum(r['明細小計'])); });
+  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (toNum(r['受注合計金額'])); });
   const statEntries = Object.entries(statusMap);
   new Chart(document.getElementById('chart-order-status'), {
     type: 'doughnut',
@@ -735,7 +735,7 @@ function buildOrders(orders) {
   orders.forEach(r => {
     const num = r['受注番号'];
     if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r['得意先名称'], amount: 0, status: r['引当/計上'] };
-    orderAgg[num].amount += toNum(r['明細小計']);
+    orderAgg[num].amount += toNum(r['受注合計金額']);
   });
   const tbody = document.querySelector('#table-orders tbody');
   Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
