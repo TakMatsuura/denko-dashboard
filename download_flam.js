@@ -72,72 +72,17 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Orders: try multiple page types to find one with CSV export
+  // Orders: scrape from analysis page per department (DNK-E, DNK-E-N, DNK-E-S)
   try {
-    console.log('=== Orders: trying multiple pages ===');
+    console.log('=== Orders: scraping per department ===');
+    const departments = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+    let allRows = [];
+    let headers = null;
 
-    // Approach 1: Try orders list page (not analysis)
-    const orderPages = [
-      { url: `${FLAM_URL}/orders`, name: 'orders index' },
-      { url: `${FLAM_URL}/orders/index`, name: 'orders/index' },
-      { url: `${FLAM_URL}/orders?startdate=${S}&enddate=${E}`, name: 'orders with dates' },
-    ];
-
-    let downloaded = false;
-    for (const pg of orderPages) {
-      if (downloaded) break;
-      console.log(`  Trying page: ${pg.name} (${pg.url})`);
-      try {
-        await page.goto(pg.url, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForTimeout(2000);
-
-        // Find ALL links on the page
-        const allLinks = await page.evaluate(() => {
-          return Array.from(document.querySelectorAll('a'))
-            .filter(a => a.href)
-            .map(a => ({ href: a.href, text: (a.textContent || '').trim().substring(0, 60) }))
-            .filter(l => l.href.includes('export') || l.text.includes('エクスポート') || l.text.includes('CSV') || l.text.includes('ダウンロード'));
-        });
-        console.log(`  Found ${allLinks.length} export links:`);
-        allLinks.forEach(l => console.log(`    "${l.text}" -> ${l.href}`));
-
-        // Try export URLs for this page
-        const baseUrl = pg.url.split('?')[0];
-        const exportUrls = [
-          `${baseUrl}/export?file-format=csv`,
-          `${baseUrl}/export?startdate=${S}&enddate=${E}&file-format=csv`,
-          ...allLinks.map(l => l.href.includes('file-format') ? l.href : `${l.href}${l.href.includes('?') ? '&' : '?'}file-format=csv`),
-        ];
-
-        for (const expUrl of exportUrls) {
-          const response = await page.evaluate(async (url) => {
-            const res = await fetch(url, { credentials: 'include' });
-            const buffer = await res.arrayBuffer();
-            const bytes = Array.from(new Uint8Array(buffer));
-            const text = new TextDecoder('utf-8').decode(new Uint8Array(bytes).slice(0, 300));
-            return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, preview: text };
-          }, expUrl);
-
-          const preview = response.preview.trimStart();
-          const isCSV = !preview.startsWith('<!DOCTYPE') && !preview.startsWith('<html') && !preview.startsWith('<?xml') && response.length > 200;
-          console.log(`  ${isCSV ? 'CSV!' : 'HTML'} ${expUrl.substring(0,80)}... (${response.length} bytes)`);
-
-          if (isCSV) {
-            fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), Buffer.from(response.bytes));
-            console.log(`Downloaded: orders.csv (${response.length} bytes)`);
-            downloaded = true;
-            break;
-          }
-        }
-      } catch (e) {
-        console.log(`  Error on ${pg.name}: ${e.message}`);
-      }
-    }
-
-    // Approach 2: Try scraping the HTML table directly from the analysis page
-    if (!downloaded) {
-      console.log('  Trying HTML table scrape from analysis page...');
-      await page.goto(`${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`, { waitUntil: 'networkidle', timeout: 60000 });
+    for (const dept of departments) {
+      console.log(`  Loading orders for dept: ${dept}`);
+      const url = `${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&sec=${encodeURIComponent(dept)}&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
       await page.waitForTimeout(3000);
 
       const tableData = await page.evaluate(() => {
@@ -155,48 +100,38 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
         return results;
       });
 
-      console.log(`  Found ${tableData.length} tables with data`);
-      // Debug: show all tables info
-      tableData.forEach((t, i) => {
-        console.log(`  Table ${i}: ${t.length} rows x ${t[0].length} cols`);
-        console.log(`    Headers: ${t[0].join(' | ')}`);
-        if (t.length > 1) {
-          console.log(`    Row1 cols: ${t[1].length}`);
-          console.log(`    Row1: ${t[1].join(' | ')}`);
+      // Find the data table (largest one)
+      const dataTables = tableData.filter(t => t.length > 5);
+      if (dataTables.length > 0) {
+        const table = dataTables.sort((a, b) => b.length - a.length)[0];
+        if (!headers) {
+          headers = table[0];
+          console.log(`  Headers: ${headers.join(', ')}`);
         }
-        if (t.length > 2) {
-          console.log(`    Row2: ${t[2].join(' | ')}`);
-        }
-      });
-
-      if (tableData.length > 0) {
-        // Convert the largest table to CSV
-        const biggest = tableData.sort((a, b) => b.length - a.length)[0];
-        const headerCount = biggest[0].length;
-        console.log(`  Using table: ${biggest.length} rows x ${headerCount} cols`);
-
-        // Check if header row has fewer cells than data (colspan issue)
-        if (biggest.length > 1 && biggest[1].length !== headerCount) {
-          console.log(`  WARNING: Header has ${headerCount} cols but data has ${biggest[1].length} cols!`);
-        }
-
-        // Show header-to-value mapping for first data row
-        if (biggest.length > 1) {
-          const dataRow = biggest[1];
-          console.log('  Column mapping (sample):');
-          for (let i = 0; i < Math.max(headerCount, dataRow.length); i++) {
-            console.log(`    [${i}] "${biggest[0][i] || '???'}" = "${(dataRow[i] || '').substring(0, 30)}"`);
-          }
-        }
-
-        const csvContent = biggest.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
-        fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), csvContent, 'utf8');
-        console.log(`Downloaded (scraped): orders.csv (${csvContent.length} bytes, ${biggest.length} rows)`);
-        downloaded = true;
+        // Add data rows (skip header row)
+        const dataRows = table.slice(1);
+        allRows = allRows.concat(dataRows);
+        console.log(`  ${dept}: ${dataRows.length} rows`);
+      } else {
+        console.log(`  ${dept}: no data table found (${tableData.length} tables)`);
       }
     }
 
-    if (!downloaded) console.log('  WARNING: Could not get orders data');
+    if (headers && allRows.length > 0) {
+      console.log(`  Total: ${allRows.length} rows across ${departments.length} depts`);
+      // Show sample row
+      if (allRows.length > 0) {
+        console.log('  Sample row:');
+        for (let i = 0; i < headers.length; i++) {
+          console.log(`    [${i}] "${headers[i]}" = "${(allRows[0][i] || '').substring(0, 30)}"`);
+        }
+      }
+      const csvContent = [headers, ...allRows].map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+      fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), csvContent, 'utf8');
+      console.log(`Downloaded: orders.csv (${csvContent.length} bytes, ${allRows.length + 1} rows)`);
+    } else {
+      console.log('  WARNING: Could not get orders data from any department');
+    }
   } catch (e) {
     console.log(`  Orders download failed: ${e.message}`);
   }

@@ -327,14 +327,11 @@ async function loadData() {
   const deptSales = parseCSV(deptSalesText);
   const orders = parseCSV(ordersText);
 
-  // Filter customers to electric depts for order filtering
-  const denkiCustomerCodes = new Set(customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード'])).map(r => r['得意先コード']));
-  const denkiOrders = orders.filter(r => denkiCustomerCodes.has(r['得意先コード']));
-
+  // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
   buildBudget(budget, deptSales);
   buildCustomers(customerSales);
-  buildOrders(denkiOrders);
+  buildOrders(orders);
   buildPurchase(purchase);
 }
 
