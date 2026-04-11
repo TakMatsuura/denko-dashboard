@@ -72,43 +72,107 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Orders: load with preview=1 to trigger search via URL, then export
+  // Orders: navigate to page, fill form, submit search, then export
   try {
-    console.log('  Loading orders page with search...');
-    await page.goto(`${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`, { waitUntil: 'networkidle', timeout: 60000 });
-    await page.waitForTimeout(3000);
-    console.log('  Orders page loaded');
+    console.log('  Loading orders report page...');
+    await page.goto(`${FLAM_URL}/orders/report/view/analysis`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(2000);
 
-    const response = await page.evaluate(async (url) => {
-      const res = await fetch(url, { credentials: 'include' });
-      const buffer = await res.arrayBuffer();
-      const bytes = Array.from(new Uint8Array(buffer));
-      return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes };
-    }, `${FLAM_URL}/orders/report/view/analysis/export?preview=1&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=&file-format=csv`);
+    // Fill date fields and submit search
+    const sdInput = await page.$('input[name="sd"]') || await page.$('#sd');
+    const edInput = await page.$('input[name="ed"]') || await page.$('#ed');
+    if (sdInput) { await sdInput.fill('2025/05/01'); console.log('  Set start date'); }
+    if (edInput) { await edInput.fill('2026/04/30'); console.log('  Set end date'); }
 
-    console.log(`  Orders export: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
-    fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), Buffer.from(response.bytes));
-    console.log(`Downloaded: orders.csv (${response.length} bytes)`);
+    // Try clicking search/submit button
+    const searchBtn = await page.$('input[type="submit"]') || await page.$('button[type="submit"]') || await page.$('.btn-search') || await page.$('a.btn-primary');
+    if (searchBtn) {
+      await searchBtn.click();
+      await page.waitForTimeout(5000);
+      console.log('  Search submitted');
+    } else {
+      // Fallback: submit via URL with preview
+      await page.goto(`${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`, { waitUntil: 'networkidle', timeout: 60000 });
+      await page.waitForTimeout(3000);
+      console.log('  Loaded via URL params (no search button found)');
+    }
+
+    // Debug: log page title and check for results
+    const pageTitle = await page.title();
+    const pageUrl = page.url();
+    console.log(`  Page: ${pageTitle}, URL: ${pageUrl}`);
+
+    // Try multiple export URL patterns
+    const exportUrls = [
+      `${FLAM_URL}/orders/report/view/analysis/export?file-format=csv`,
+      `${FLAM_URL}/orders/report/view/analysis/export?preview=1&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&file-format=csv`,
+      `${FLAM_URL}/orders/report/view/analysis/export?preview=1&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=&file-format=csv`,
+    ];
+
+    let downloaded = false;
+    for (const exportUrl of exportUrls) {
+      const response = await page.evaluate(async (url) => {
+        const res = await fetch(url, { credentials: 'include' });
+        const buffer = await res.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buffer));
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(bytes).slice(0, 200));
+        return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, preview: text };
+      }, exportUrl);
+
+      console.log(`  Export try: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
+      console.log(`  Preview: ${response.preview.substring(0, 100)}`);
+
+      // Check if it's actual CSV (not HTML)
+      const preview = response.preview.trimStart();
+      if (!preview.startsWith('<!DOCTYPE') && !preview.startsWith('<html') && !preview.startsWith('<?xml') && response.length > 100) {
+        fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), Buffer.from(response.bytes));
+        console.log(`Downloaded: orders.csv (${response.length} bytes)`);
+        downloaded = true;
+        break;
+      } else {
+        console.log(`  Skipped (HTML response or too small)`);
+      }
+    }
+    if (!downloaded) console.log('  WARNING: Could not get orders CSV from any URL pattern');
   } catch (e) {
     console.log(`  Orders download failed: ${e.message}`);
   }
 
-  // Stockrecents: similar approach
+  // Stockrecents: try multiple URL patterns
   try {
     console.log('  Loading stockrecents page...');
-    await page.goto(`${FLAM_URL}/stockrecents/export`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto(`${FLAM_URL}/stockrecents`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForTimeout(2000);
 
-    const response = await page.evaluate(async (url) => {
-      const res = await fetch(url, { credentials: 'include' });
-      const buffer = await res.arrayBuffer();
-      const bytes = Array.from(new Uint8Array(buffer));
-      return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes };
-    }, `${FLAM_URL}/stockrecents/export/download?file-format=csv`);
+    const stockUrls = [
+      `${FLAM_URL}/stockrecents/export/download?file-format=csv`,
+      `${FLAM_URL}/stockrecents/export?file-format=csv`,
+    ];
 
-    console.log(`  Stock export: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
-    fs.writeFileSync(path.join(DATA_DIR, 'stockrecents.csv'), Buffer.from(response.bytes));
-    console.log(`Downloaded: stockrecents.csv (${response.length} bytes)`);
+    let downloaded = false;
+    for (const stockUrl of stockUrls) {
+      const response = await page.evaluate(async (url) => {
+        const res = await fetch(url, { credentials: 'include' });
+        const buffer = await res.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buffer));
+        const text = new TextDecoder('utf-8').decode(new Uint8Array(bytes).slice(0, 200));
+        return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, preview: text };
+      }, stockUrl);
+
+      console.log(`  Stock export try: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
+      console.log(`  Preview: ${response.preview.substring(0, 100)}`);
+
+      const preview = response.preview.trimStart();
+      if (!preview.startsWith('<!DOCTYPE') && !preview.startsWith('<html') && !preview.startsWith('<?xml') && response.length > 100) {
+        fs.writeFileSync(path.join(DATA_DIR, 'stockrecents.csv'), Buffer.from(response.bytes));
+        console.log(`Downloaded: stockrecents.csv (${response.length} bytes)`);
+        downloaded = true;
+        break;
+      } else {
+        console.log(`  Skipped (HTML response or too small)`);
+      }
+    }
+    if (!downloaded) console.log('  WARNING: Could not get stockrecents CSV');
   } catch (e) {
     console.log(`  Stock download failed: ${e.message}`);
   }
