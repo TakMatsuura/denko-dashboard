@@ -72,31 +72,19 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Orders: need to navigate, fill dates, click search, then export
+  // Orders: load with preview=1 to trigger search via URL, then export
   try {
-    console.log('  Loading orders page...');
-    await page.goto(`${FLAM_URL}/orders/report/view/analysis`, { waitUntil: 'networkidle', timeout: 60000 });
+    console.log('  Loading orders page with search...');
+    await page.goto(`${FLAM_URL}/orders/report/view/analysis?preview=1&sort=&direction=&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(3000);
+    console.log('  Orders page loaded');
 
-    // Fill start date
-    const sdInput = page.locator('input[name="sd"]').first();
-    await sdInput.fill('2025/05/01');
-
-    // Fill end date
-    const edInput = page.locator('input[name="ed"]').first();
-    await edInput.fill('2026/04/30');
-
-    // Click search button
-    await page.locator('input[name="検索"], input[type="image"][name="検索"]').first().click();
-    await page.waitForTimeout(5000);
-    console.log('  Orders search completed');
-
-    // Now fetch the export
     const response = await page.evaluate(async (url) => {
       const res = await fetch(url, { credentials: 'include' });
       const buffer = await res.arrayBuffer();
       const bytes = Array.from(new Uint8Array(buffer));
       return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes };
-    }, `${FLAM_URL}/orders/report/view/analysis/export?rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&fi=&file-format=csv`);
+    }, `${FLAM_URL}/orders/report/view/analysis/export?preview=1&rt=1&sd=2025%2F05%2F01&ed=2026%2F04%2F30&cu_st=&cu_ed=&ch=&pd=&pn=&fi=&file-format=csv`);
 
     console.log(`  Orders export: ${response.status}, type: ${response.contentType}, size: ${response.length}`);
     fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), Buffer.from(response.bytes));
