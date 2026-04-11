@@ -218,9 +218,11 @@ function showTab(id, el) {
 }
 
 function parseCSV(text) {
+  if (!text || !text.trim()) return [];
   // Remove BOM and normalize line endings
   text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = text.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
   const headers = parseCSVLine(lines[0]);
   return lines.slice(1).map(line => {
     const vals = parseCSVLine(line);
@@ -254,13 +256,13 @@ function progressColor(pct) { return pct >= 100 ? 'green' : pct >= 80 ? 'blue' :
 async function loadData() {
   let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText;
   if (typeof CSV_DATA !== 'undefined') {
-    saleTotalText = CSV_DATA.dept_product_sales;
-    purchaseText = CSV_DATA.dept_purchase;
-    stockText = CSV_DATA.stockrecents;
-    budgetText = CSV_DATA.budget;
-    customerSalesText = CSV_DATA.dept_customer_sales;
-    deptSalesText = CSV_DATA.dept_sales;
-    ordersText = CSV_DATA.orders;
+    saleTotalText = CSV_DATA.dept_product_sales || '';
+    purchaseText = CSV_DATA.dept_purchase || '';
+    stockText = CSV_DATA.stockrecents || '';
+    budgetText = CSV_DATA.budget || '';
+    customerSalesText = CSV_DATA.dept_customer_sales || '';
+    deptSalesText = CSV_DATA.dept_sales || '';
+    ordersText = CSV_DATA.orders || '';
   } else {
     [saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText] = await Promise.all([
       fetch('data/saletotalization.csv').then(r => r.text()),
