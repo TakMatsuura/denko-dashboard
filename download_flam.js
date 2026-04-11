@@ -224,63 +224,101 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
-  // Product Master: scrape /products/view/ list page to get product code → classification
+  // Product Master: get transformer product codes by filtering with 変圧器 classification
   try {
-    console.log('=== Product Master ===');
-    await page.goto(`${FLAM_URL}/products/view/?limit=10000`, { waitUntil: 'networkidle', timeout: 90000 });
-    await page.waitForTimeout(3000);
+    console.log('=== Product Master (変圧器 filter) ===');
+    await page.goto(`${FLAM_URL}/products/view/`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(2000);
 
-    const title = await page.title();
-    console.log(`  Page title: ${title}`);
-
-    // Scrape tables
-    const tableData = await page.evaluate(() => {
-      const tables = document.querySelectorAll('table');
+    // Find all checkboxes and their labels to understand the form
+    const checkboxes = await page.evaluate(() => {
       const results = [];
-      for (const table of tables) {
-        const rows = Array.from(table.querySelectorAll('tr'));
-        if (rows.length > 1) {
-          const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
-          if (data.length > 0 && data[0].length > 2) results.push(data);
-        }
-      }
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        const parent = cb.parentElement;
+        const label = parent ? parent.textContent.trim().substring(0, 40) : '';
+        results.push({ name: cb.name, value: cb.value, id: cb.id, label });
+      });
       return results;
     });
+    console.log(`  Found ${checkboxes.length} checkboxes`);
+    // Log ones related to product classification
+    const classCheckboxes = checkboxes.filter(c => c.name.includes('class') || c.name.includes('分類') || c.name.includes('productclass'));
+    console.log(`  Classification checkboxes: ${JSON.stringify(classCheckboxes)}`);
+    // Log ALL checkbox names for discovery
+    const uniqueNames = [...new Set(checkboxes.map(c => c.name))];
+    console.log(`  All checkbox names: ${uniqueNames.join(', ')}`);
+    // Find the 変圧器 checkbox specifically
+    const transCheckbox = checkboxes.find(c => c.label.includes('変圧器') || c.value.includes('変圧器'));
+    console.log(`  変圧器 checkbox: ${JSON.stringify(transCheckbox)}`);
 
-    console.log(`  Found ${tableData.length} tables`);
-    tableData.forEach((t, i) => {
-      console.log(`  Table ${i}: ${t.length} rows x ${t[0].length} cols`);
-      console.log(`    Headers: ${t[0].join(' | ')}`);
-      if (t.length > 1) console.log(`    Row1: ${t[1].slice(0, 15).join(' | ')}`);
-      if (t.length > 2) console.log(`    Row2: ${t[2].slice(0, 15).join(' | ')}`);
-    });
+    if (transCheckbox) {
+      // Check the 変圧器 checkbox
+      if (transCheckbox.id) {
+        await page.check(`#${transCheckbox.id}`);
+      } else {
+        await page.check(`input[name="${transCheckbox.name}"][value="${transCheckbox.value}"]`);
+      }
+      console.log('  Checked 変圧器 checkbox');
 
-    // Find data table (< 50 cols to exclude search form)
-    const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 50);
-    if (dataTables.length > 0) {
-      const table = dataTables.sort((a, b) => b.length - a.length)[0];
-      console.log(`  Using: ${table.length} rows x ${table[0].length} cols`);
-      console.log(`  ALL headers: ${table[0].join(' | ')}`);
-
-      // Check if 分類 columns exist
-      const classIdx = table[0].findIndex(h => h.includes('分類'));
-      console.log(`  分類 column index: ${classIdx}`);
-      if (classIdx >= 0 && table.length > 1) {
-        console.log(`  Sample 分類 values: ${table.slice(1, 6).map(r => r[classIdx]).join(', ')}`);
+      // Set limit to 10000 to get all results
+      const limitSelect = await page.locator('select').filter({ hasText: '50件ずつ' });
+      if (await limitSelect.count() > 0) {
+        // Try URL approach instead: submit form and add limit
       }
 
-      const csvContent = table.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
-      fs.writeFileSync(path.join(DATA_DIR, 'product_master.csv'), csvContent, 'utf8');
-      console.log(`Downloaded: product_master.csv (${table.length} rows, ${csvContent.length} bytes)`);
-    } else {
-      console.log('  No suitable data table found on /products/view/');
+      // Submit the search form
+      await page.click('input[type="submit"]');
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(3000);
+
+      // Now add limit=10000 to the URL and reload
+      const currentUrl = page.url();
+      const limitUrl = currentUrl.includes('limit=') ? currentUrl.replace(/limit=\d+/, 'limit=10000') : currentUrl + (currentUrl.includes('?') ? '&' : '?') + 'limit=10000';
+      console.log(`  Reloading with limit: ${limitUrl}`);
+      await page.goto(limitUrl, { waitUntil: 'networkidle', timeout: 90000 });
+      await page.waitForTimeout(2000);
+
       // Get result count
       const resultInfo = await page.evaluate(() => {
         const text = document.body.innerText;
         const match = text.match(/(\d+)\s*件/);
         return match ? match[0] : 'unknown';
       });
-      console.log(`  Result count: ${resultInfo}`);
+      console.log(`  変圧器 products: ${resultInfo}`);
+
+      // Scrape product codes from the data table
+      const tableData = await page.evaluate(() => {
+        const tables = document.querySelectorAll('table');
+        const results = [];
+        for (const table of tables) {
+          const rows = Array.from(table.querySelectorAll('tr'));
+          if (rows.length > 1) {
+            const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+            if (data.length > 0 && data[0].length > 2) results.push(data);
+          }
+        }
+        return results;
+      });
+
+      const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 50);
+      if (dataTables.length > 0) {
+        const table = dataTables.sort((a, b) => b.length - a.length)[0];
+        console.log(`  Data table: ${table.length} rows x ${table[0].length} cols`);
+
+        // Save as CSV (商品コード, 商品名, etc.)
+        const csvContent = table.map(row => row.map(cell => `"${(cell || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+        fs.writeFileSync(path.join(DATA_DIR, 'product_master.csv'), csvContent, 'utf8');
+        console.log(`Downloaded: product_master.csv (${table.length} rows = transformer products)`);
+
+        // Log sample product codes
+        const codeIdx = table[0].findIndex(h => h.includes('商品コード'));
+        if (codeIdx >= 0) {
+          const sampleCodes = table.slice(1, 6).map(r => r[codeIdx]);
+          console.log(`  Sample transformer codes: ${sampleCodes.join(', ')}`);
+        }
+      }
+    } else {
+      console.log('  WARNING: Could not find 変圧器 checkbox');
     }
   } catch (e) {
     console.log(`  Product master download failed: ${e.message}`);
