@@ -219,31 +219,41 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
 </div>
 
-<!-- CUSTOMER DETAIL MODAL -->
-<div id="customer-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; overflow-y:auto;">
-  <div style="margin:40px auto; max-width:1000px; background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.3);">
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; background:#DAA520; border-radius:12px 12px 0 0;">
-      <h2 id="modal-customer-name" style="margin:0; color:#fff; font-size:1.3rem;"></h2>
-      <button onclick="closeCustomerModal()" style="background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
+<!-- CUSTOMER SUMMARY PAGE -->
+<div id="customer-page" class="section">
+  <div class="page-header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button onclick="closeCustomerPage()" style="background:none; border:2px solid #DAA520; color:#DAA520; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">← 戻る</button>
+      <div>
+        <h2 id="cp-name" style="margin:0;"></h2>
+        <div class="subtitle" id="cp-subtitle"></div>
+      </div>
     </div>
-    <div style="padding:24px;">
-      <div style="display:flex; gap:8px; margin-bottom:16px;">
-        <button id="modal-tab-sales" onclick="showModalTab('sales')" style="padding:8px 20px; border:2px solid #DAA520; border-radius:6px; cursor:pointer; font-weight:600;">売上明細</button>
-        <button id="modal-tab-orders" onclick="showModalTab('orders')" style="padding:8px 20px; border:2px solid #DAA520; border-radius:6px; cursor:pointer; font-weight:600;">受注明細</button>
+  </div>
+  <div class="content">
+    <!-- Summary Cards -->
+    <div class="grid-2" style="margin-bottom:16px;">
+      <div class="card"><div class="card-header"><h3>売上高</h3></div><div class="card-body"><div id="cp-sales" style="font-size:2rem;font-weight:700;color:#333;"></div></div></div>
+      <div class="card"><div class="card-header"><h3>粗利益</h3></div><div class="card-body"><div id="cp-profit" style="font-size:2rem;font-weight:700;color:#333;"></div></div></div>
+      <div class="card"><div class="card-header"><h3>粗利率</h3></div><div class="card-body"><div id="cp-margin" style="font-size:2rem;font-weight:700;color:#333;"></div></div></div>
+      <div class="card"><div class="card-header"><h3>受注高</h3></div><div class="card-body"><div id="cp-orders-total" style="font-size:2rem;font-weight:700;color:#333;"></div></div></div>
+    </div>
+    <!-- Top 10 Sales Chart -->
+    <div class="grid-2">
+      <div class="card full"><div class="card-header"><h3>売上 Top 10 (商品別)</h3></div><div class="card-body" style="height:350px;"><canvas id="cp-chart-sales"></canvas></div></div>
+    </div>
+    <!-- Sales Detail Table -->
+    <div class="card" style="margin:16px 0;">
+      <div class="card-header"><h3>売上明細</h3><div class="badge" id="cp-sales-count"></div></div>
+      <div class="card-body">
+        <table id="cp-table-sales"><thead><tr><th>商品コード</th><th>商品名</th><th class="text-right">売上額</th><th class="text-right">原価</th><th class="text-right">粗利益</th><th class="text-right">粗利率</th></tr></thead><tbody></tbody></table>
       </div>
-      <div id="modal-sales" style="display:none;">
-        <div id="modal-sales-summary" style="font-size:1.2rem; font-weight:700; margin-bottom:12px;"></div>
-        <table style="width:100%; border-collapse:collapse;" id="modal-sales-table">
-          <thead><tr style="background:#f5f0e0;"><th style="padding:8px; text-align:left;">商品コード</th><th style="padding:8px; text-align:left;">商品名</th><th style="padding:8px; text-align:right;">売上額</th><th style="padding:8px; text-align:right;">原価</th><th style="padding:8px; text-align:right;">粗利益</th><th style="padding:8px; text-align:right;">粗利率</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div id="modal-orders" style="display:none;">
-        <div id="modal-orders-summary" style="font-size:1.2rem; font-weight:700; margin-bottom:12px;"></div>
-        <table style="width:100%; border-collapse:collapse;" id="modal-orders-table">
-          <thead><tr style="background:#f5f0e0;"><th style="padding:8px; text-align:left;">受注日</th><th style="padding:8px; text-align:left;">受注番号</th><th style="padding:8px; text-align:right;">受注金額</th><th style="padding:8px; text-align:right;">原価</th><th style="padding:8px; text-align:left;">引当/計上</th></tr></thead>
-          <tbody></tbody>
-        </table>
+    </div>
+    <!-- Orders Detail Table -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><h3>受注明細</h3><div class="badge" id="cp-orders-count"></div></div>
+      <div class="card-body">
+        <table id="cp-table-orders"><thead><tr><th>受注日</th><th>受注番号</th><th class="text-right">受注金額</th><th class="text-right">原価</th><th>引当/計上</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
   </div>
@@ -505,7 +515,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     data: { labels: custTop.map(s => s[0]), datasets: [{ data: custTop.map(s => s[1]), backgroundColor: COLORS }] },
     options: {
       responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } },
-      onClick: (e, elements) => { if (elements.length > 0) { const name = custTop[elements[0].index][0]; if (name !== 'その他') openCustomerModal(name); } }
+      onClick: (e, elements) => { if (elements.length > 0) { const name = custTop[elements[0].index][0]; if (name !== 'その他') openCustomerPage(name); } }
     }
   });
 
@@ -525,7 +535,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   // Custom HTML legends
   document.getElementById('legend-customer').innerHTML = custTop.map((s,i) => {
     if (s[0] === 'その他') return `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`;
-    return `<div class="legend-item" style="cursor:pointer;" onclick="openCustomerModal('${s[0].replace(/'/g,"\\'")}')"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span><span style="border-bottom:1px dashed #999;">${s[0]}</span></div>`;
+    return `<div class="legend-item" style="cursor:pointer;" onclick="openCustomerPage('${s[0].replace(/'/g,"\\'")}')"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span><span style="border-bottom:1px dashed #999;">${s[0]}</span></div>`;
   }).join('');
   document.getElementById('legend-supplier').innerHTML = top.map((s,i) => `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`).join('');
 }
@@ -674,7 +684,7 @@ function buildCustomers(customerSales) {
     data: { labels: top15.map(r => r['得意先名']), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } },
-      onClick: (e, elements) => { if (elements.length > 0) openCustomerModal(top15[elements[0].index]['得意先名'], top15[elements[0].index]['得意先コード']); }
+      onClick: (e, elements) => { if (elements.length > 0) openCustomerPage(top15[elements[0].index]['得意先名'], top15[elements[0].index]['得意先コード']); }
     }
   });
 
@@ -689,70 +699,91 @@ function buildCustomers(customerSales) {
       <td class="text-right">${fmt(toNum(r['純売上額']))}</td>
       <td class="text-right">${fmt(toNum(r['粗利益']))}</td>
       <td class="text-right ${margin>=30?'text-green':margin<10?'text-red':''}">${margin.toFixed(1)}%</td>`;
-    tr.onclick = () => openCustomerModal(r['得意先名'], r['得意先コード']);
+    tr.onclick = () => openCustomerPage(r['得意先名'], r['得意先コード']);
     tbody.appendChild(tr);
   });
 }
 
-function openCustomerModal(name, code) {
-  document.getElementById('modal-customer-name').textContent = name;
-  document.getElementById('customer-modal').style.display = 'block';
-  document.body.style.overflow = 'hidden';
+let _cpChart = null;
+let _prevSection = null;
 
-  // Sales detail
+function openCustomerPage(name, code) {
+  // Remember current section and hide all sections + nav
+  _prevSection = document.querySelector('.section.active');
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelector('.navbar').style.display = 'none';
+  document.getElementById('customer-page').classList.add('active');
+
+  // Header
+  document.getElementById('cp-name').textContent = name;
+  document.getElementById('cp-subtitle').textContent = code ? `Customer Code: ${code}` : '';
+
+  // Sales data
   const salesData = (window._custProduct || []).filter(r => r['得意先名'] === name);
   const salesSorted = salesData.sort((a, b) => toNum(b['純売上額']) - toNum(a['純売上額']));
   const salesTotalAmt = salesSorted.reduce((s, r) => s + toNum(r['純売上額']), 0);
-  document.getElementById('modal-sales-summary').textContent = `売上合計: ${fmtOku(salesTotalAmt)} (${salesSorted.length}件)`;
-  const salesTbody = document.querySelector('#modal-sales-table tbody');
-  salesTbody.innerHTML = '';
-  salesSorted.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid #eee';
-    const m = toNum(r['粗利率']);
-    tr.innerHTML = `<td style="padding:6px 8px;">${r['商品コード']||''}</td>
-      <td style="padding:6px 8px;">${r['商品名']||''}</td>
-      <td style="padding:6px 8px; text-align:right;">${fmt(toNum(r['純売上額']))}</td>
-      <td style="padding:6px 8px; text-align:right;">${fmt(toNum(r['原価計']))}</td>
-      <td style="padding:6px 8px; text-align:right;">${fmt(toNum(r['粗利益']))}</td>
-      <td style="padding:6px 8px; text-align:right; ${m>=30?'color:green':m<10?'color:red':''}">${m.toFixed(1)}%</td>`;
-    salesTbody.appendChild(tr);
-  });
+  const profitTotal = salesSorted.reduce((s, r) => s + toNum(r['粗利益']), 0);
+  const marginPct = salesTotalAmt > 0 ? (profitTotal / salesTotalAmt * 100) : 0;
 
-  // Orders detail
+  // Orders data
   const ordersData = (window._orders || []).filter(r => r['得意先名称'] === name);
   const ordersSorted = ordersData.sort((a, b) => toNum(b['受注合計金額']) - toNum(a['受注合計金額']));
   const ordersTotalAmt = ordersSorted.reduce((s, r) => s + toNum(r['受注合計金額']), 0);
-  document.getElementById('modal-orders-summary').textContent = `受注合計: ${fmtOku(ordersTotalAmt)} (${ordersSorted.length}件)`;
-  const ordersTbody = document.querySelector('#modal-orders-table tbody');
+
+  // Summary cards
+  document.getElementById('cp-sales').innerHTML = `${fmtOku(salesTotalAmt)} <span style="font-size:0.9rem;color:#666">(${fmt(salesTotalAmt)}円)</span>`;
+  document.getElementById('cp-profit').innerHTML = `${fmtOku(profitTotal)} <span style="font-size:0.9rem;color:#666">(${fmt(profitTotal)}円)</span>`;
+  document.getElementById('cp-margin').innerHTML = `<span style="color:${marginPct>=30?'green':marginPct<10?'red':'#333'}">${marginPct.toFixed(1)}%</span>`;
+  document.getElementById('cp-orders-total').innerHTML = `${fmtOku(ordersTotalAmt)} <span style="font-size:0.9rem;color:#666">(${fmt(ordersTotalAmt)}円)</span>`;
+
+  // Top 10 bar chart
+  if (_cpChart) { _cpChart.destroy(); _cpChart = null; }
+  const top10 = salesSorted.slice(0, 10);
+  _cpChart = new Chart(document.getElementById('cp-chart-sales'), {
+    type: 'bar',
+    data: { labels: top10.map(r => (r['商品名']||'').substring(0,20)), datasets: [{ label: '売上額', data: top10.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+  });
+
+  // Sales detail table
+  document.getElementById('cp-sales-count').textContent = `${salesSorted.length} items`;
+  const salesTbody = document.querySelector('#cp-table-sales tbody');
+  salesTbody.innerHTML = '';
+  salesSorted.forEach(r => {
+    const tr = document.createElement('tr');
+    const m = toNum(r['粗利率']);
+    tr.innerHTML = `<td>${r['商品コード']||''}</td>
+      <td>${r['商品名']||''}</td>
+      <td class="text-right">${fmt(toNum(r['純売上額']))}</td>
+      <td class="text-right">${fmt(toNum(r['原価計']))}</td>
+      <td class="text-right">${fmt(toNum(r['粗利益']))}</td>
+      <td class="text-right ${m>=30?'text-green':m<10?'text-red':''}">${m.toFixed(1)}%</td>`;
+    salesTbody.appendChild(tr);
+  });
+
+  // Orders detail table
+  document.getElementById('cp-orders-count').textContent = `${ordersSorted.length} orders`;
+  const ordersTbody = document.querySelector('#cp-table-orders tbody');
   ordersTbody.innerHTML = '';
   ordersSorted.forEach(r => {
     const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid #eee';
-    tr.innerHTML = `<td style="padding:6px 8px;">${r['受注日']||''}</td>
-      <td style="padding:6px 8px;">${r['受注番号']||''}</td>
-      <td style="padding:6px 8px; text-align:right;">${fmt(toNum(r['受注合計金額']))}</td>
-      <td style="padding:6px 8px; text-align:right;">${fmt(toNum(r['原価計']))}</td>
-      <td style="padding:6px 8px;">${r['引当/計上']||''}</td>`;
+    tr.innerHTML = `<td>${r['受注日']||''}</td>
+      <td>${r['受注番号']||''}</td>
+      <td class="text-right">${fmt(toNum(r['受注合計金額']))}</td>
+      <td class="text-right">${fmt(toNum(r['原価計']))}</td>
+      <td>${r['引当/計上']||''}</td>`;
     ordersTbody.appendChild(tr);
   });
 
-  showModalTab('sales');
+  window.scrollTo(0, 0);
 }
 
-function closeCustomerModal() {
-  document.getElementById('customer-modal').style.display = 'none';
-  document.body.style.overflow = '';
-}
-document.getElementById('customer-modal').onclick = function(e) { if (e.target === this) closeCustomerModal(); };
-
-function showModalTab(tab) {
-  document.getElementById('modal-sales').style.display = tab === 'sales' ? 'block' : 'none';
-  document.getElementById('modal-orders').style.display = tab === 'orders' ? 'block' : 'none';
-  document.getElementById('modal-tab-sales').style.background = tab === 'sales' ? '#DAA520' : '#fff';
-  document.getElementById('modal-tab-sales').style.color = tab === 'sales' ? '#fff' : '#333';
-  document.getElementById('modal-tab-orders').style.background = tab === 'orders' ? '#DAA520' : '#fff';
-  document.getElementById('modal-tab-orders').style.color = tab === 'orders' ? '#fff' : '#333';
+function closeCustomerPage() {
+  document.getElementById('customer-page').classList.remove('active');
+  document.querySelector('.navbar').style.display = '';
+  if (_prevSection) _prevSection.classList.add('active');
+  else document.getElementById('overview').classList.add('active');
+  _prevSection = null;
 }
 
 function buildPurchase(purchase) {
