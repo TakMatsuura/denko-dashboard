@@ -78,11 +78,66 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Placeorders (発注) - for customer-supplier linkage
-  await downloadCSV(context, page,
-    `${FLAM_URL}/placeorders/view/?sd=${S}&limit=10000`,
-    `${FLAM_URL}/placeorders/export?file-format=csv`,
-    'placeorders.csv');
+  // Placeorders (発注) - scrape HTML table for customer-supplier linkage
+  try {
+    console.log('=== Placeorders: scraping from list page per department ===');
+    const poDepartments = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+    let poAllRows = [];
+    let poHeaders = null;
+
+    for (const dept of poDepartments) {
+      console.log(`  Loading placeorders for dept: ${dept}`);
+      const url = `${FLAM_URL}/placeorders/view/?sd=2025%2F05%2F01&ed=&sec=${encodeURIComponent(dept)}&limit=10000`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
+      await page.waitForTimeout(3000);
+
+      const resultInfo = await page.evaluate(() => {
+        const text = document.body.innerText;
+        const match = text.match(/(\d+)\s*件.*の検索結果/);
+        return match ? match[0] : 'unknown';
+      });
+      console.log(`  ${dept}: ${resultInfo}`);
+
+      const tableData = await page.evaluate(() => {
+        const tables = document.querySelectorAll('table');
+        const results = [];
+        for (const table of tables) {
+          const rows = Array.from(table.querySelectorAll('tr'));
+          if (rows.length > 1) {
+            const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
+            if (data.length > 0 && data[0].length > 3) results.push(data);
+          }
+        }
+        return results;
+      });
+
+      const dataTables = tableData.filter(t => t.length > 1 && t[0].length < 30);
+      if (dataTables.length > 0) {
+        const table = dataTables.sort((a, b) => b.length - a.length)[0];
+        if (!poHeaders) {
+          poHeaders = table[0];
+          console.log(`  Headers (${poHeaders.length}): ${poHeaders.join(' | ')}`);
+          if (table.length > 1) console.log(`  Row0: ${table[1].join(' | ')}`);
+        }
+        const dataRows = table.slice(1);
+        poAllRows = poAllRows.concat(dataRows);
+        console.log(`  ${dept}: ${dataRows.length} data rows`);
+      } else {
+        console.log(`  ${dept}: no usable table found`);
+      }
+    }
+
+    if (poHeaders && poAllRows.length > 0) {
+      console.log(`  Total: ${poAllRows.length} rows`);
+      const csvContent = [poHeaders, ...poAllRows].map(row => row.map(cell => `"${(cell||'').replace(/"/g, '""')}"`).join(',')).join('\n');
+      fs.writeFileSync(path.join(DATA_DIR, 'placeorders.csv'), csvContent, 'utf8');
+      console.log(`Downloaded: placeorders.csv (${csvContent.length} bytes, ${poAllRows.length + 1} rows)`);
+    } else {
+      console.log('  WARNING: Could not get placeorders data');
+    }
+  } catch (e) {
+    console.log(`  Placeorders download failed: ${e.message}`);
+  }
 
   // Orders: scrape from orders LIST page per department (sec= works here)
   try {
