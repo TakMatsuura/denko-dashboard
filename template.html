@@ -195,7 +195,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   <div class="content">
     <div class="kpi-row" id="kpi-budget"></div>
     <div class="grid-2">
-      <div class="card full"><div class="card-header"><h3>Monthly Budget Achievement</h3></div><div class="card-body"><canvas id="chart-budget-monthly"></canvas></div></div>
+      <div class="card full"><div class="card-header"><h3>Monthly Budget Achievement</h3></div><div class="card-body" style="height:280px"><canvas id="chart-budget-monthly"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>Cumulative Progress</h3></div><div class="card-body"><canvas id="chart-budget-cumulative"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>Monthly Achievement Rate</h3></div><div class="card-body"><canvas id="chart-budget-rate"></canvas></div></div>
     </div>
@@ -502,8 +502,9 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
   });
 
-  // Customer pie (得意先別売上)
+  // Customer pie (得意先別売上) - 電力系部門のみ
   const custSorted = customerSales
+    .filter(r => DENKI_DEPTS.includes(r['部門コード']))
     .map(r => [r['得意先名'], toNum(r['純売上額'])])
     .filter(r => r[1] > 0)
     .sort((a,b) => b[1]-a[1]);
