@@ -78,11 +78,55 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Sales detail (売上伝票CSV) - includes 得意先 + 仕入先 for customer-supplier linkage
-  await downloadCSV(context, page,
-    `${FLAM_URL}/sales/view/?sd=${S}&limit=10000`,
-    `${FLAM_URL}/sales/export?file-format=csv`,
-    'sales_detail.csv');
+  // Sales detail (売上伝票CSV) - click download button (fetch returns HTML)
+  try {
+    console.log('=== Sales Detail: download via button click ===');
+    // Load sales list with date filter and department filters
+    for (const dept of ['DNK-E', 'DNK-E-N', 'DNK-E-S']) {
+      const url = `${FLAM_URL}/sales/view/?sd=2025%2F05%2F01&ed=&sec=${encodeURIComponent(dept)}&limit=10000`;
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
+      await page.waitForTimeout(2000);
+
+      const resultInfo = await page.evaluate(() => {
+        const text = document.body.innerText;
+        const match = text.match(/(\d+)\s*件.*の検索結果/);
+        return match ? match[0] : 'unknown';
+      });
+      console.log(`  ${dept}: ${resultInfo}`);
+
+      // Click download button and wait for download
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 30000 }),
+        page.click('a[href*="/sales/export"], a:has-text("ダウンロード"), a:has-text("CSV")')
+      ]);
+
+      const filePath = path.join(DATA_DIR, `sales_detail_${dept}.csv`);
+      await download.saveAs(filePath);
+      const size = fs.statSync(filePath).size;
+      console.log(`  Downloaded: sales_detail_${dept}.csv (${size} bytes)`);
+    }
+
+    // Merge all department files
+    let mergedHeaders = null;
+    let mergedRows = [];
+    for (const dept of ['DNK-E', 'DNK-E-N', 'DNK-E-S']) {
+      const filePath = path.join(DATA_DIR, `sales_detail_${dept}.csv`);
+      if (!fs.existsSync(filePath)) continue;
+      const content = fs.readFileSync(filePath);
+      // Decode as Shift-JIS
+      const text = new TextDecoder('shift_jis').decode(content);
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length > 0 && !mergedHeaders) mergedHeaders = lines[0];
+      mergedRows = mergedRows.concat(lines.slice(1));
+    }
+    if (mergedHeaders) {
+      const merged = [mergedHeaders, ...mergedRows].join('\n');
+      fs.writeFileSync(path.join(DATA_DIR, 'sales_detail.csv'), merged, 'utf8');
+      console.log(`  Merged: sales_detail.csv (${mergedRows.length} data rows)`);
+    }
+  } catch (e) {
+    console.log(`  Sales detail download failed: ${e.message}`);
+  }
 
   // Orders: scrape from orders LIST page per department (sec= works here)
   try {
