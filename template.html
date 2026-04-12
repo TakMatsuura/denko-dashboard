@@ -503,7 +503,10 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   new Chart(document.getElementById('chart-customer-pie'), {
     type: 'doughnut',
     data: { labels: custTop.map(s => s[0]), datasets: [{ data: custTop.map(s => s[1]), backgroundColor: COLORS }] },
-    options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } } }
+    options: {
+      responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } },
+      onClick: (e, elements) => { if (elements.length > 0) { const name = custTop[elements[0].index][0]; if (name !== 'その他') openCustomerModal(name); } }
+    }
   });
 
   // Supplier pie (仕入先別仕入) - 電力機器事業部のみ
@@ -520,7 +523,10 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   });
 
   // Custom HTML legends
-  document.getElementById('legend-customer').innerHTML = custTop.map((s,i) => `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`).join('');
+  document.getElementById('legend-customer').innerHTML = custTop.map((s,i) => {
+    if (s[0] === 'その他') return `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`;
+    return `<div class="legend-item" style="cursor:pointer;" onclick="openCustomerModal('${s[0].replace(/'/g,"\\'")}')"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span><span style="border-bottom:1px dashed #999;">${s[0]}</span></div>`;
+  }).join('');
   document.getElementById('legend-supplier').innerHTML = top.map((s,i) => `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i%COLORS.length]}"></span>${s[0]}</div>`).join('');
 }
 
@@ -666,7 +672,10 @@ function buildCustomers(customerSales) {
   new Chart(document.getElementById('chart-customer-rank'), {
     type: 'bar',
     data: { labels: top15.map(r => r['得意先名']), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => { if (elements.length > 0) openCustomerModal(top15[elements[0].index]['得意先名'], top15[elements[0].index]['得意先コード']); }
+    }
   });
 
   const tbody = document.querySelector('#table-customers tbody');
