@@ -434,7 +434,7 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
         { label: 'Budget', data: months.map(() => monthlyBudget), borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], type: 'line', fill: false, pointStyle: 'circle', pointRadius: 3, pointBackgroundColor: '#ea001e' },
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
   });
 
   // Profit chart
