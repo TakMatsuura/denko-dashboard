@@ -67,16 +67,52 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=section&grouping%5B%5D=product&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_product_sales.csv');
 
-  // productclass2 grouping (分類2 = 変圧器 vs others)
-  await downloadCSV(context, page,
-    `${FLAM_URL}/sales/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass2&limit=20`,
-    `${FLAM_URL}/sales/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=customer&grouping%5B%5D=section&grouping%5B%5D=productclass2&file-format=csv`,
-    'customer_productclass_sales.csv');
-
-  await downloadCSV(context, page,
+await downloadCSV(context, page,
     `${FLAM_URL}/purchases/totalize?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&limit=20`,
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
+
+  // Debug: check purchase CSV columns and totals per department
+  try {
+    const iconv = require('iconv-lite');
+    const purchPath = path.join(DATA_DIR, 'dept_purchase.csv');
+    if (fs.existsSync(purchPath)) {
+      const raw = fs.readFileSync(purchPath);
+      const text = iconv.decode(raw, 'Shift_JIS').replace(/^\uFEFF/, '');
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+      console.log('=== Purchase CSV Debug ===');
+      console.log(`  Columns: ${headers.join(' | ')}`);
+      console.log(`  Total rows: ${lines.length - 1}`);
+      // Sum per department
+      const deptIdx = headers.findIndex(h => h.includes('部門コード'));
+      const amtCols = headers.filter(h => h.includes('仕入'));
+      console.log(`  部門コード index: ${deptIdx}`);
+      console.log(`  仕入 columns: ${amtCols.join(', ')}`);
+      if (deptIdx >= 0) {
+        const deptTotals = {};
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].match(/(".*?"|[^,]*)/g)?.map(c => c.replace(/"/g, '').trim()) || [];
+          const dept = cols[deptIdx] || 'unknown';
+          if (!deptTotals[dept]) deptTotals[dept] = { count: 0, amounts: {} };
+          deptTotals[dept].count++;
+          amtCols.forEach(colName => {
+            const idx = headers.indexOf(colName);
+            if (idx >= 0) {
+              const val = parseFloat((cols[idx] || '0').replace(/,/g, '')) || 0;
+              deptTotals[dept].amounts[colName] = (deptTotals[dept].amounts[colName] || 0) + val;
+            }
+          });
+        }
+        Object.entries(deptTotals).forEach(([dept, data]) => {
+          const amts = Object.entries(data.amounts).map(([k, v]) => `${k}=${v.toLocaleString()}`).join(', ');
+          console.log(`  ${dept}: ${data.count} rows, ${amts}`);
+        });
+      }
+    }
+  } catch (e) {
+    console.log(`  Purchase debug failed: ${e.message}`);
+  }
 
   // Orders: scrape from orders LIST page per department (sec= works here)
   try {
@@ -225,21 +261,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
-  // Log productclass2 CSV headers (after SJIS conversion in build_html.js)
-  try {
-    const pcPath = path.join(DATA_DIR, 'customer_productclass_sales.csv');
-    if (fs.existsSync(pcPath)) {
-      const content = fs.readFileSync(pcPath);
-      const preview = content.toString('utf8').substring(0, 500);
-      const firstLine = preview.split('\n')[0];
-      console.log(`  productclass2 CSV headers: ${firstLine.substring(0, 300)}`);
-      if (preview.split('\n').length > 1) {
-        console.log(`  productclass2 CSV row1: ${preview.split('\n')[1].substring(0, 200)}`);
-      }
-    }
-  } catch (e) {
-    console.log(`  CSV check failed: ${e.message}`);
-  }
+
 
   await browser.close();
   console.log('=== Done ===');
