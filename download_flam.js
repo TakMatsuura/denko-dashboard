@@ -78,7 +78,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Sales detail (売上伝票CSV) - fill export form and click download
+  // Sales detail (売上伝票CSV) - fill export form and click CSV download
   try {
     console.log('=== Sales Detail: download via export form ===');
 
@@ -86,48 +86,25 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     await page.goto(`${FLAM_URL}/sales/export`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForTimeout(2000);
 
-    // Log form fields for debugging
-    const formInfo = await page.evaluate(() => {
-      const inputs = document.querySelectorAll('input, select, button, a');
-      return Array.from(inputs).map(el => ({
-        tag: el.tagName, type: el.type || '', name: el.name || '', id: el.id || '',
-        value: el.value || '', text: el.textContent?.trim().substring(0, 50) || '',
-        href: el.href || ''
-      }));
-    });
-    console.log('  Form elements:');
-    formInfo.forEach(el => console.log(`    ${el.tag} type=${el.type} name=${el.name} id=${el.id} value=${el.value} text=${el.text}`));
-
     // Fill start date
-    const dateInput = await page.$('input[name*="startdate"], input[name*="sd"], input[name*="売上日"]');
-    if (dateInput) {
-      await dateInput.fill('2025/05/01');
-      console.log('  Filled start date');
-    } else {
-      // Try first date input
-      const firstDate = await page.$('input[type="text"]');
-      if (firstDate) await firstDate.fill('2025/05/01');
-      console.log('  Filled first text input with date');
-    }
+    await page.fill('input[name="sd"]', '2025/05/01');
+    console.log('  Filled start date: 2025/05/01');
 
-    // Select CSV format
-    const csvOption = await page.$('select option[value*="csv"]');
-    if (csvOption) {
-      const select = await csvOption.evaluate(el => el.closest('select').name);
-      await page.selectOption(`select[name="${select}"]`, { label: 'CSV形式(.csv)' });
-      console.log('  Selected CSV format via select');
-    } else {
-      // Try clicking CSV link/option
-      const csvLink = await page.$('a:has-text("CSV"), option:has-text("CSV")');
-      if (csvLink) { await csvLink.click(); console.log('  Clicked CSV option'); }
-    }
-
+    // Click the nav "ダウンロード" button to open format dropdown
+    await page.click('#btn_download');
     await page.waitForTimeout(1000);
 
-    // Click download button
+    // Log dropdown options for debugging
+    const dropdownInfo = await page.evaluate(() => {
+      const items = document.querySelectorAll('.dropdown-menu a, .dropdown-menu li, [class*="dropdown"] a, ul.dropdown a');
+      return Array.from(items).map(el => ({ text: el.textContent?.trim(), href: el.href || '', className: el.className }));
+    });
+    console.log('  Dropdown items:', JSON.stringify(dropdownInfo));
+
+    // Click CSV option in dropdown
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
-      page.click('a:has-text("ダウンロード"), button:has-text("ダウンロード"), input[type="submit"]')
+      page.click('a:has-text("CSV形式"), a:has-text("CSV")')
     ]);
 
     const filePath = path.join(DATA_DIR, 'sales_detail.csv');
@@ -135,7 +112,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     const size = fs.statSync(filePath).size;
     console.log(`  Downloaded: sales_detail.csv (${size} bytes)`);
 
-    // Decode Shift-JIS
+    // Decode Shift-JIS and save as UTF-8
     const content = fs.readFileSync(filePath);
     const text = new TextDecoder('shift_jis').decode(content);
     fs.writeFileSync(filePath, text, 'utf8');
