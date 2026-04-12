@@ -72,48 +72,6 @@ await downloadCSV(context, page,
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Debug: check purchase CSV columns and totals per department
-  try {
-    const purchPath = path.join(DATA_DIR, 'dept_purchase.csv');
-    if (fs.existsSync(purchPath)) {
-      const raw = fs.readFileSync(purchPath);
-      // Try utf8 first (FLAM export might be utf8), fallback works for column detection
-      const text = raw.toString('utf8').replace(/^\uFEFF/, '');
-      const lines = text.split('\n').filter(l => l.trim());
-      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
-      console.log('=== Purchase CSV Debug ===');
-      console.log(`  Columns: ${headers.join(' | ')}`);
-      console.log(`  Total rows: ${lines.length - 1}`);
-      // Sum per department
-      const deptIdx = headers.findIndex(h => h.includes('部門コード'));
-      const amtCols = headers.filter(h => h.includes('仕入'));
-      console.log(`  部門コード index: ${deptIdx}`);
-      console.log(`  仕入 columns: ${amtCols.join(', ')}`);
-      if (deptIdx >= 0) {
-        const deptTotals = {};
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].match(/(".*?"|[^,]*)/g)?.map(c => c.replace(/"/g, '').trim()) || [];
-          const dept = cols[deptIdx] || 'unknown';
-          if (!deptTotals[dept]) deptTotals[dept] = { count: 0, amounts: {} };
-          deptTotals[dept].count++;
-          amtCols.forEach(colName => {
-            const idx = headers.indexOf(colName);
-            if (idx >= 0) {
-              const val = parseFloat((cols[idx] || '0').replace(/,/g, '')) || 0;
-              deptTotals[dept].amounts[colName] = (deptTotals[dept].amounts[colName] || 0) + val;
-            }
-          });
-        }
-        Object.entries(deptTotals).forEach(([dept, data]) => {
-          const amts = Object.entries(data.amounts).map(([k, v]) => `${k}=${v.toLocaleString()}`).join(', ');
-          console.log(`  ${dept}: ${data.count} rows, ${amts}`);
-        });
-      }
-    }
-  } catch (e) {
-    console.log(`  Purchase debug failed: ${e.message}`);
-  }
-
   // Orders: scrape from orders LIST page per department (sec= works here)
   try {
     console.log('=== Orders: scraping from list page per department ===');
