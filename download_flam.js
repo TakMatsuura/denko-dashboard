@@ -78,50 +78,70 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Sales detail (売上伝票CSV) - navigate to export URL to trigger download
+  // Sales detail (売上伝票CSV) - fill export form and click download
   try {
-    console.log('=== Sales Detail: download via page.goto ===');
-    let mergedHeaders = null;
-    let mergedRows = [];
+    console.log('=== Sales Detail: download via export form ===');
 
-    for (const dept of ['DNK-E', 'DNK-E-N', 'DNK-E-S']) {
-      // First load search page to set session/filters
-      const searchUrl = `${FLAM_URL}/sales/view/?sd=2025%2F05%2F01&ed=&sec=${encodeURIComponent(dept)}&limit=10000`;
-      await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 90000 });
-      await page.waitForTimeout(2000);
+    // Navigate to sales export page
+    await page.goto(`${FLAM_URL}/sales/export`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(2000);
 
-      const resultInfo = await page.evaluate(() => {
-        const text = document.body.innerText;
-        const match = text.match(/(\d+)\s*件.*の検索結果/);
-        return match ? match[0] : 'unknown';
-      });
-      console.log(`  ${dept}: ${resultInfo}`);
+    // Log form fields for debugging
+    const formInfo = await page.evaluate(() => {
+      const inputs = document.querySelectorAll('input, select, button, a');
+      return Array.from(inputs).map(el => ({
+        tag: el.tagName, type: el.type || '', name: el.name || '', id: el.id || '',
+        value: el.value || '', text: el.textContent?.trim().substring(0, 50) || '',
+        href: el.href || ''
+      }));
+    });
+    console.log('  Form elements:');
+    formInfo.forEach(el => console.log(`    ${el.tag} type=${el.type} name=${el.name} id=${el.id} value=${el.value} text=${el.text}`));
 
-      // Navigate to export URL - triggers file download
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 30000 }),
-        page.goto(`${FLAM_URL}/sales/export?file-format=csv`)
-      ]);
-
-      const filePath = path.join(DATA_DIR, `sales_detail_${dept}.csv`);
-      await download.saveAs(filePath);
-      const size = fs.statSync(filePath).size;
-      console.log(`  Downloaded: sales_detail_${dept}.csv (${size} bytes)`);
-
-      // Decode Shift-JIS and collect rows
-      const content = fs.readFileSync(filePath);
-      const text = new TextDecoder('shift_jis').decode(content);
-      const lines = text.split('\n').filter(l => l.trim());
-      if (lines.length > 0 && !mergedHeaders) mergedHeaders = lines[0];
-      mergedRows = mergedRows.concat(lines.slice(1));
-      console.log(`  ${dept}: ${lines.length - 1} data rows`);
+    // Fill start date
+    const dateInput = await page.$('input[name*="startdate"], input[name*="sd"], input[name*="売上日"]');
+    if (dateInput) {
+      await dateInput.fill('2025/05/01');
+      console.log('  Filled start date');
+    } else {
+      // Try first date input
+      const firstDate = await page.$('input[type="text"]');
+      if (firstDate) await firstDate.fill('2025/05/01');
+      console.log('  Filled first text input with date');
     }
 
-    if (mergedHeaders) {
-      const merged = [mergedHeaders, ...mergedRows].join('\n');
-      fs.writeFileSync(path.join(DATA_DIR, 'sales_detail.csv'), merged, 'utf8');
-      console.log(`  Merged: sales_detail.csv (${mergedRows.length} data rows)`);
+    // Select CSV format
+    const csvOption = await page.$('select option[value*="csv"]');
+    if (csvOption) {
+      const select = await csvOption.evaluate(el => el.closest('select').name);
+      await page.selectOption(`select[name="${select}"]`, { label: 'CSV形式(.csv)' });
+      console.log('  Selected CSV format via select');
+    } else {
+      // Try clicking CSV link/option
+      const csvLink = await page.$('a:has-text("CSV"), option:has-text("CSV")');
+      if (csvLink) { await csvLink.click(); console.log('  Clicked CSV option'); }
     }
+
+    await page.waitForTimeout(1000);
+
+    // Click download button
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.click('a:has-text("ダウンロード"), button:has-text("ダウンロード"), input[type="submit"]')
+    ]);
+
+    const filePath = path.join(DATA_DIR, 'sales_detail.csv');
+    await download.saveAs(filePath);
+    const size = fs.statSync(filePath).size;
+    console.log(`  Downloaded: sales_detail.csv (${size} bytes)`);
+
+    // Decode Shift-JIS
+    const content = fs.readFileSync(filePath);
+    const text = new TextDecoder('shift_jis').decode(content);
+    fs.writeFileSync(filePath, text, 'utf8');
+    const lines = text.split('\n').filter(l => l.trim());
+    console.log(`  sales_detail.csv: ${lines.length - 1} data rows`);
+    if (lines.length > 0) console.log(`  Headers: ${lines[0].substring(0, 200)}`);
   } catch (e) {
     console.log(`  Sales detail download failed: ${e.message}`);
   }
