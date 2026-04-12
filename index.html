@@ -9572,7 +9572,8 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   const totalSales = denkiData.reduce((s, r) => s + (toNum(r['純売上額'])), 0);
   const totalProfit = denkiData.reduce((s, r) => s + (toNum(r['粗利益'])), 0);
   const totalCost = denkiData.reduce((s, r) => s + (toNum(r['原価計'])), 0);
-  const totalPurchase = purchase.reduce((s, r) => s + (toNum(r['純仕入額'])), 0);
+  const denkiPurchase = purchase.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  const totalPurchase = denkiPurchase.reduce((s, r) => s + (toNum(r['純仕入額'])), 0);
   const profitRate = totalSales !== 0 ? (totalProfit / totalSales * 100).toFixed(1) : 0;
   const achieveRate = (totalSales / BUDGET_ANNUAL * 100).toFixed(1);
 
@@ -9642,9 +9643,9 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } } }
   });
 
-  // Supplier pie (仕入先別仕入)
+  // Supplier pie (仕入先別仕入) - 電力機器事業部のみ
   const supplierTotals = {};
-  purchase.forEach(r => { supplierTotals[r['仕入先名']] = (supplierTotals[r['仕入先名']] || 0) + (toNum(r['純仕入額'])); });
+  denkiPurchase.forEach(r => { supplierTotals[r['仕入先名']] = (supplierTotals[r['仕入先名']] || 0) + (toNum(r['純仕入額'])); });
   const sorted = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]);
   const top = sorted.slice(0,7);
   const other = sorted.slice(7).reduce((s,e) => s+e[1], 0);
