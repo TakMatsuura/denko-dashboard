@@ -78,47 +78,81 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
-  // Sales detail (売上伝票CSV) - fill export form and click CSV download
+  // Sales detail (売上伝票CSV) - POST form submission via fetch
   try {
-    console.log('=== Sales Detail: download via export form ===');
+    console.log('=== Sales Detail: download via form POST ===');
 
-    // Navigate to sales export page
+    // Navigate to sales export page to get session/cookies
     await page.goto(`${FLAM_URL}/sales/export`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForTimeout(2000);
 
-    // Fill start date
-    await page.fill('input[name="sd"]', '2025/05/01');
-    console.log('  Filled start date: 2025/05/01');
-
-    // Click the nav "ダウンロード" button to open format dropdown
-    await page.click('#btn_download');
-    await page.waitForTimeout(1000);
-
-    // Log dropdown options for debugging
-    const dropdownInfo = await page.evaluate(() => {
-      const items = document.querySelectorAll('.dropdown-menu a, .dropdown-menu li, [class*="dropdown"] a, ul.dropdown a');
-      return Array.from(items).map(el => ({ text: el.textContent?.trim(), href: el.href || '', className: el.className }));
+    // Get the form action and any hidden fields
+    const formData = await page.evaluate(() => {
+      const form = document.querySelector('form');
+      const action = form ? form.action : '';
+      const method = form ? form.method : '';
+      // Get all hidden inputs
+      const hiddens = {};
+      document.querySelectorAll('input[type="hidden"]').forEach(el => {
+        if (el.name) hiddens[el.name] = el.value;
+      });
+      return { action, method, hiddens };
     });
-    console.log('  Dropdown items:', JSON.stringify(dropdownInfo));
+    console.log('  Form action:', formData.action, 'method:', formData.method);
+    console.log('  Hidden fields:', JSON.stringify(formData.hiddens));
 
-    // Click CSV option in dropdown
-    const [download] = await Promise.all([
-      page.waitForEvent('download', { timeout: 60000 }),
-      page.click('a:has-text("CSV形式"), a:has-text("CSV")')
-    ]);
+    // Submit form via fetch with POST, including date and file format
+    const response = await page.evaluate(async (baseUrl) => {
+      const form = document.querySelector('form');
+      const formDataObj = new FormData(form);
+      // Set start date
+      formDataObj.set('sd', '2025/05/01');
+      // Set file format to CSV
+      formDataObj.set('file-format', 'csv');
+      formDataObj.set('format', 'csv');
+
+      const res = await fetch(baseUrl + '/sales/export', {
+        method: 'POST',
+        credentials: 'include',
+        body: formDataObj
+      });
+      const buffer = await res.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      return {
+        status: res.status,
+        contentType: res.headers.get('content-type'),
+        length: bytes.length,
+        bytes: bytes,
+        url: res.url
+      };
+    }, FLAM_URL);
+
+    console.log(`  POST response: ${response.status}, type: ${response.contentType}, size: ${response.length}, url: ${response.url}`);
 
     const filePath = path.join(DATA_DIR, 'sales_detail.csv');
-    await download.saveAs(filePath);
-    const size = fs.statSync(filePath).size;
-    console.log(`  Downloaded: sales_detail.csv (${size} bytes)`);
 
-    // Decode Shift-JIS and save as UTF-8
-    const content = fs.readFileSync(filePath);
-    const text = new TextDecoder('shift_jis').decode(content);
-    fs.writeFileSync(filePath, text, 'utf8');
-    const lines = text.split('\n').filter(l => l.trim());
-    console.log(`  sales_detail.csv: ${lines.length - 1} data rows`);
-    if (lines.length > 0) console.log(`  Headers: ${lines[0].substring(0, 200)}`);
+    if (response.contentType && response.contentType.includes('text/csv')) {
+      // Direct CSV response
+      fs.writeFileSync(filePath, Buffer.from(response.bytes));
+      const content = fs.readFileSync(filePath);
+      const text = new TextDecoder('shift_jis').decode(content);
+      fs.writeFileSync(filePath, text, 'utf8');
+      const lines = text.split('\n').filter(l => l.trim());
+      console.log(`  sales_detail.csv: ${lines.length - 1} data rows (CSV)`);
+    } else {
+      // Might be HTML - save and check content
+      const rawText = Buffer.from(response.bytes).toString('utf8');
+      console.log(`  Response start: ${rawText.substring(0, 200)}`);
+      // Try Shift-JIS decode in case it's CSV with wrong content-type
+      const text = new TextDecoder('shift_jis').decode(Buffer.from(response.bytes));
+      if (text.includes('売上番号') || text.includes('受注番号')) {
+        fs.writeFileSync(filePath, text, 'utf8');
+        const lines = text.split('\n').filter(l => l.trim());
+        console.log(`  sales_detail.csv: ${lines.length - 1} data rows (detected as CSV)`);
+      } else {
+        console.log('  Response is not CSV');
+      }
+    }
   } catch (e) {
     console.log(`  Sales detail download failed: ${e.message}`);
   }
