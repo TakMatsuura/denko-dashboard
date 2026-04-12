@@ -78,6 +78,12 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     `${FLAM_URL}/purchases/totalize/export?startdate=${S}&enddate=${E}&grouping%5B%5D=suppliers&grouping%5B%5D=section&grouping%5B%5D=slipdate&file-format=csv`,
     'dept_purchase.csv');
 
+  // Placeorders (発注) - for customer-supplier linkage
+  await downloadCSV(context, page,
+    `${FLAM_URL}/placeorders/view/?sd=${S}&limit=10000`,
+    `${FLAM_URL}/placeorders/export?file-format=csv`,
+    'placeorders.csv');
+
   // Orders: scrape from orders LIST page per department (sec= works here)
   try {
     console.log('=== Orders: scraping from list page per department ===');

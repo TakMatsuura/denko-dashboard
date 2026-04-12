@@ -73,7 +73,7 @@ body { font-family: 'Salesforce Sans', 'SF Pro Display', -apple-system, 'Segoe U
 .card { background: var(--sf-white); border: 1px solid var(--sf-border); border-radius: var(--sf-radius); box-shadow: var(--sf-card-shadow); }
 .card.full { grid-column: 1 / -1; }
 .card-header { padding: 8px 12px; border-bottom: 1px solid var(--sf-border); display: flex; align-items: center; justify-content: space-between; }
-.card-header h3 { font-size: 12px; font-weight: 600; color: var(--sf-dark); }
+.card-header h3 { font-size: 15px; font-weight: 700; color: var(--sf-dark); border-bottom: 2px solid #DAA520; padding-bottom: 2px; }
 .card-header .badge { font-size: 11px; background: #fdf5e0; color: var(--sf-blue); padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 .card-body { padding: 10px; }
 
@@ -353,6 +353,7 @@ async function loadData() {
     deptSalesText = CSV_DATA.dept_sales || '';
     ordersText = CSV_DATA.orders || '';
     custProductText = CSV_DATA.customer_product_sales || '';
+    window._placeordersText = CSV_DATA.placeorders || '';
   } else {
     [saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText] = await Promise.all([
       fetch('data/saletotalization.csv').then(r => r.text()),
@@ -373,6 +374,12 @@ async function loadData() {
   const deptSales = parseCSV(deptSalesText);
   const orders = parseCSV(ordersText);
   const custProduct = parseCSV(custProductText);
+
+  // Parse placeorders for customer-supplier linkage
+  const placeorders = parseCSV(window._placeordersText || '');
+  console.log('=== Placeorders ===', placeorders.length, 'rows');
+  if (placeorders.length > 0) console.log('Columns:', Object.keys(placeorders[0]).join(', '));
+  if (placeorders.length > 0) console.log('Sample:', JSON.stringify(placeorders[0]));
 
   // Store globally for drill-down
   window._custProduct = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));

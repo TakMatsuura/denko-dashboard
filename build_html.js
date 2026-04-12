@@ -32,7 +32,7 @@ let template = fs.readFileSync(TEMPLATE, 'utf8');
 template = template.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
 // Build CSV_DATA block
-const keys = ['dept_product_sales', 'dept_purchase', 'stockrecents', 'dept_customer_sales', 'dept_sales', 'orders', 'customer_product_sales'];
+const keys = ['dept_product_sales', 'dept_purchase', 'stockrecents', 'dept_customer_sales', 'dept_sales', 'orders', 'customer_product_sales', 'placeorders'];
 let csvDataBlock = '<script>\nconst CSV_DATA = {\n';
 
 for (const key of keys) {
