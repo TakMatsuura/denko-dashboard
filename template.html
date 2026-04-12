@@ -256,6 +256,17 @@ if (sessionStorage.getItem('denko-auth') === '1') {
         <table id="cp-table-orders"><thead><tr><th>受注日</th><th>受注番号</th><th class="text-right">受注金額</th><th class="text-right">原価</th><th>引当/計上</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
+    <!-- Supplier Breakdown -->
+    <div class="grid-2" style="margin-bottom:16px;">
+      <div class="card"><div class="card-header"><h3>仕入先別 原価構成</h3><div class="badge" id="cp-supplier-count"></div></div><div class="card-body" style="height:280px;display:flex;align-items:center;gap:8px"><div style="flex:0 0 180px;max-height:250px"><canvas id="cp-chart-supplier"></canvas></div><div id="cp-legend-supplier" class="legend-grid"></div></div></div>
+      <div class="card"><div class="card-header"><h3>仕入高合計</h3></div><div class="card-body"><div id="cp-purchase-total" style="font-size:2rem;font-weight:700;color:#333;"></div></div></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><h3>仕入先明細</h3></div>
+      <div class="card-body">
+        <table id="cp-table-supplier"><thead><tr><th>仕入先</th><th class="text-right">原価合計</th><th class="text-right">構成比</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -377,13 +388,10 @@ async function loadData() {
 
   // Parse placeorders for customer-supplier linkage
   const salesDetail = parseCSV(window._salesDetailText || '');
-  console.log('=== Sales Detail ===', salesDetail.length, 'rows');
-  if (salesDetail.length > 0) console.log('SD Columns:', Object.keys(salesDetail[0]).join(', '));
-  if (salesDetail.length > 0) console.log('SD Sample:', JSON.stringify(salesDetail[0]));
-
   // Store globally for drill-down
   window._custProduct = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));
   window._orders = orders;
+  window._salesDetail = salesDetail.filter(r => DENKI_DEPTS.includes(r['部門コード']));
 
   // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
@@ -781,6 +789,49 @@ function openCustomerPage(name, code) {
       <td class="text-right">${fmt(toNum(r['原価計']))}</td>
       <td>${r['引当/計上']||''}</td>`;
     ordersTbody.appendChild(tr);
+  });
+
+  // Supplier breakdown from sales detail (原価 × 数量)
+  const custSalesDetail = (window._salesDetail || []).filter(r => r['得意先名'] === name);
+  const supplierTotals = {};
+  custSalesDetail.forEach(r => {
+    const supplier = r['商品の仕入先名'] || '不明';
+    const cost = toNum(r['原価']) * toNum(r['数量']);
+    if (cost !== 0) supplierTotals[supplier] = (supplierTotals[supplier] || 0) + cost;
+  });
+  const supplierSorted = Object.entries(supplierTotals).sort((a, b) => b[1] - a[1]);
+  const supplierTotal = supplierSorted.reduce((s, e) => s + e[1], 0);
+
+  // Purchase total card
+  document.getElementById('cp-purchase-total').innerHTML = `${fmtOku(supplierTotal)} <span style="font-size:0.9rem;color:#666">(${fmt(supplierTotal)}円)</span>`;
+  document.getElementById('cp-supplier-count').textContent = `${supplierSorted.length} suppliers`;
+
+  // Supplier pie chart
+  if (window._cpSupplierChart) { window._cpSupplierChart.destroy(); window._cpSupplierChart = null; }
+  const supTop = supplierSorted.slice(0, 7);
+  const supOther = supplierSorted.slice(7).reduce((s, e) => s + e[1], 0);
+  if (supOther > 0) supTop.push(['その他', supOther]);
+  if (supTop.length > 0) {
+    window._cpSupplierChart = new Chart(document.getElementById('cp-chart-supplier'), {
+      type: 'doughnut',
+      data: { labels: supTop.map(s => s[0]), datasets: [{ data: supTop.map(s => s[1]), backgroundColor: COLORS }] },
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+    });
+    document.getElementById('cp-legend-supplier').innerHTML = supTop.map((s, i) =>
+      `<div class="legend-item"><span class="legend-dot" style="background:${COLORS[i % COLORS.length]}"></span>${s[0]}: ${fmtOku(s[1])}</div>`
+    ).join('');
+  }
+
+  // Supplier detail table
+  const supTbody = document.querySelector('#cp-table-supplier tbody');
+  supTbody.innerHTML = '';
+  supplierSorted.forEach(([name, amount]) => {
+    const tr = document.createElement('tr');
+    const pct = supplierTotal > 0 ? (amount / supplierTotal * 100).toFixed(1) : 0;
+    tr.innerHTML = `<td>${name}</td>
+      <td class="text-right">${fmt(amount)}</td>
+      <td class="text-right">${pct}%</td>`;
+    supTbody.appendChild(tr);
   });
 
   window.scrollTo(0, 0);
