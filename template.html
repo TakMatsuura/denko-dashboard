@@ -327,6 +327,20 @@ async function loadData() {
   const deptSales = parseCSV(deptSalesText);
   const orders = parseCSV(ordersText);
 
+  // Debug: purchase data summary
+  if (purchase.length > 0) {
+    console.log('Purchase columns:', Object.keys(purchase[0]));
+    const deptSums = {};
+    purchase.forEach(r => {
+      const dept = r['部門コード'] || 'unknown';
+      if (!deptSums[dept]) deptSums[dept] = { 純仕入額: 0, 総仕入額: 0, count: 0 };
+      deptSums[dept].純仕入額 += toNum(r['純仕入額']);
+      deptSums[dept].総仕入額 += toNum(r['総仕入額']);
+      deptSums[dept].count++;
+    });
+    console.log('Purchase by dept:', JSON.stringify(deptSums, null, 2));
+  }
+
   // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
   buildBudget(budget, deptSales);
