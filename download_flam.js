@@ -74,11 +74,11 @@ await downloadCSV(context, page,
 
   // Debug: check purchase CSV columns and totals per department
   try {
-    const iconv = require('iconv-lite');
     const purchPath = path.join(DATA_DIR, 'dept_purchase.csv');
     if (fs.existsSync(purchPath)) {
       const raw = fs.readFileSync(purchPath);
-      const text = iconv.decode(raw, 'Shift_JIS').replace(/^\uFEFF/, '');
+      // Try utf8 first (FLAM export might be utf8), fallback works for column detection
+      const text = raw.toString('utf8').replace(/^\uFEFF/, '');
       const lines = text.split('\n').filter(l => l.trim());
       const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
       console.log('=== Purchase CSV Debug ===');
