@@ -48,8 +48,8 @@ for (const key of keys) {
     console.log(`  SKIPPED (HTML/XML): ${key}`);
     continue;
   }
-  // Remove backticks and </script> tags that would break the template literal
-  content = content.replace(/`/g, '').replace(/<\/script>/gi, '');
+  // Remove/escape chars that would break the template literal
+  content = content.replace(/\\/g, '\\\\').replace(/`/g, '').replace(/\$/g, '\\$').replace(/<\/script>/gi, '');
   const lines = content.split('\n').length;
   csvDataBlock += `${key}: \`\n${content}\n\`,\n`;
   console.log(`  Embedded: ${key} (${lines} lines)`);
