@@ -16132,6 +16132,7 @@ async function loadData() {
     ordersText = CSV_DATA.orders || '';
     custProductText = CSV_DATA.customer_product_sales || '';
     window._placeordersText = CSV_DATA.placeorders || '';
+    window._ordersExportText = CSV_DATA.orders_export || '';
   } else {
     [saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText] = await Promise.all([
       fetch('data/saletotalization.csv').then(r => r.text()),
@@ -16156,8 +16157,13 @@ async function loadData() {
   // Parse placeorders for customer-supplier linkage
   const placeorders = parseCSV(window._placeordersText || '');
   console.log('=== Placeorders ===', placeorders.length, 'rows');
-  if (placeorders.length > 0) console.log('Columns:', Object.keys(placeorders[0]).join(', '));
-  if (placeorders.length > 0) console.log('Sample:', JSON.stringify(placeorders[0]));
+  if (placeorders.length > 0) console.log('PO Columns:', Object.keys(placeorders[0]).join(', '));
+  if (placeorders.length > 0) console.log('PO Sample:', JSON.stringify(placeorders[0]));
+
+  const ordersExport = parseCSV(window._ordersExportText || '');
+  console.log('=== Orders Export ===', ordersExport.length, 'rows');
+  if (ordersExport.length > 0) console.log('OE Columns:', Object.keys(ordersExport[0]).join(', '));
+  if (ordersExport.length > 0) console.log('OE Sample:', JSON.stringify(ordersExport[0]));
 
   // Store globally for drill-down
   window._custProduct = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));
