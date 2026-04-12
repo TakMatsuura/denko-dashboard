@@ -528,7 +528,7 @@ function buildBudget(budget, deptSales) {
         { label: 'Budget', data: monthlyBudgets, type: 'line', borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], fill: false, pointStyle: 'circle', pointRadius: 4, pointBackgroundColor: '#ea001e' },
       ]
     },
-    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
   });
 
   // Cumulative chart
@@ -549,7 +549,7 @@ function buildBudget(budget, deptSales) {
         { label: 'Cumulative Budget', data: cumBudgets, borderColor: '#ea001e', borderDash: [6,3], fill: false, tension: 0 },
       ]
     },
-    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
   });
 
   // Achievement rate chart
