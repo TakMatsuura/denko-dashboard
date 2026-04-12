@@ -223,6 +223,9 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 <div id="purchase" class="section">
   <div class="page-header"><h2>Purchasing Analysis</h2><div class="subtitle">Supplier performance and procurement trends</div></div>
   <div class="content">
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card"><div class="card-header"><h3>TOTAL PURCHASING (税抜)</h3></div><div class="card-body"><div id="purchase-total" style="font-size:2rem;font-weight:700;color:#333"></div></div></div>
+    </div>
     <div class="grid-2">
       <div class="card full"><div class="card-header"><h3>Top Supplier Monthly Trends</h3></div><div class="card-body"><canvas id="chart-purchase-monthly"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>Supplier Ranking</h3></div><div class="card-body"><canvas id="chart-purchase-rank"></canvas></div></div>
@@ -9415,20 +9418,6 @@ async function loadData() {
   const deptSales = parseCSV(deptSalesText);
   const orders = parseCSV(ordersText);
 
-  // Debug: purchase data summary
-  if (purchase.length > 0) {
-    console.log('Purchase columns:', Object.keys(purchase[0]));
-    const deptSums = {};
-    purchase.forEach(r => {
-      const dept = r['部門コード'] || 'unknown';
-      if (!deptSums[dept]) deptSums[dept] = { 純仕入額: 0, 総仕入額: 0, count: 0 };
-      deptSums[dept].純仕入額 += toNum(r['純仕入額']);
-      deptSums[dept].総仕入額 += toNum(r['総仕入額']);
-      deptSums[dept].count++;
-    });
-    console.log('Purchase by dept:', JSON.stringify(deptSums, null, 2));
-  }
-
   // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
   buildBudget(budget, deptSales);
@@ -9744,6 +9733,8 @@ function buildCustomers(customerSales) {
 
 function buildPurchase(purchase) {
   purchase = purchase.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  const totalPurch = purchase.reduce((s, r) => s + toNum(r['純仕入額']), 0);
+  document.getElementById('purchase-total').innerHTML = `${fmtOku(totalPurch)} <span style="font-size:0.9rem;color:#666">(${fmt(totalPurch)}円)</span>`;
   const supplierMonthly = {}, allMonths = new Set(), supplierTotals = {};
   purchase.forEach(r => {
     const name = r['仕入先名'], m = r['集計年月'];
