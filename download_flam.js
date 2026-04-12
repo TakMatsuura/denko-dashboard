@@ -111,7 +111,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       formDataObj.set('file-format', 'csv');
       formDataObj.set('format', 'csv');
 
-      const res = await fetch(baseUrl + '/sales/export', {
+      const res = await fetch(baseUrl + '/sales/export/exec', {
         method: 'POST',
         credentials: 'include',
         body: formDataObj
