@@ -640,6 +640,7 @@ function buildCustomers(customerSales) {
 }
 
 function buildPurchase(purchase) {
+  purchase = purchase.filter(r => DENKI_DEPTS.includes(r['部門コード']));
   const supplierMonthly = {}, allMonths = new Set(), supplierTotals = {};
   purchase.forEach(r => {
     const name = r['仕入先名'], m = r['集計年月'];
