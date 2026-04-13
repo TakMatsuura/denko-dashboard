@@ -266,6 +266,21 @@ if (sessionStorage.getItem('denko-auth') === '1') {
         <table id="cp-table-supplier"><thead><tr><th>仕入先</th><th class="text-right">原価合計</th><th class="text-right">構成比</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
+    <!-- 受注残明細 (FY25 / FY26) -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h3>FY25 受注残明細</h3><div class="badge" id="cp-backlog-fy25-count"></div></div>
+        <div class="card-body">
+          <table id="cp-table-backlog-fy25"><thead><tr><th>受注日</th><th>受注番号</th><th>商品名</th><th class="text-right">金額</th><th>指定納期</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>FY26 受注残明細</h3><div class="badge" id="cp-backlog-fy26-count"></div></div>
+        <div class="card-body">
+          <table id="cp-table-backlog-fy26"><thead><tr><th>受注日</th><th>受注番号</th><th>商品名</th><th class="text-right">金額</th><th>指定納期</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -291,13 +306,10 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   <div class="page-header"><h2>Order Management</h2><div class="subtitle">受注状況・バックログ管理</div></div>
   <div class="content">
     <div class="kpi-row" id="kpi-orders"></div>
+    <div class="card" style="margin-bottom:10px"><div class="card-header"><h3>Monthly Order Trend</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-monthly"></canvas></div></div>
     <div class="grid-2">
-      <div class="card full"><div class="card-header"><h3>Monthly Order Trend</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-monthly"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>FY25 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy25"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>FY26 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy26"></canvas></div></div>
-    </div>
-    <div class="grid-2">
-      <div class="card"><div class="card-header"><h3>Order Status Breakdown</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-status"></canvas></div></div>
     </div>
     <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div class="badge" id="order-count"></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>指定納期</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
   </div>
@@ -840,6 +852,30 @@ function openCustomerPage(name, code) {
     supTbody.appendChild(tr);
   });
 
+  // 受注残明細 (FY25 / FY26)
+  const FY26_START = '2026-05-01';
+  const custBacklog = ordersData.filter(r => r[_ocStatus] !== '完了');
+  const custBLFY25 = custBacklog.filter(r => !r['指定納期'] || r['指定納期'] < FY26_START);
+  const custBLFY26 = custBacklog.filter(r => r['指定納期'] && r['指定納期'] >= FY26_START);
+
+  function fillBacklogTable(tableId, countId, data) {
+    const sorted = data.sort((a, b) => (a['指定納期']||'').localeCompare(b['指定納期']||''));
+    document.getElementById(countId).textContent = `${sorted.length} items`;
+    const tb = document.querySelector(`#${tableId} tbody`);
+    tb.innerHTML = '';
+    sorted.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r['受注日']||''}</td>
+        <td>${r['受注番号']||''}</td>
+        <td>${(r['商品名']||'').substring(0,25)}</td>
+        <td class="text-right">${fmt(toNum(r[_ocAmount]))}</td>
+        <td>${r['指定納期']||''}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+  fillBacklogTable('cp-table-backlog-fy25', 'cp-backlog-fy25-count', custBLFY25);
+  fillBacklogTable('cp-table-backlog-fy26', 'cp-backlog-fy26-count', custBLFY26);
+
   window.scrollTo(0, 0);
 }
 
@@ -952,29 +988,26 @@ function buildOrders(orders) {
   buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc');
   buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc');
 
-  // Order status pie
-  const statusMap = {};
-  orders.forEach(r => { const s = r[colStatus]||'不明'; statusMap[s] = (statusMap[s]||0) + toNum(r[colAmount]); });
-  const statEntries = Object.entries(statusMap);
-  new Chart(document.getElementById('chart-order-status'), {
-    type: 'doughnut',
-    data: { labels: statEntries.map(s => s[0]), datasets: [{ data: statEntries.map(s => s[1]), backgroundColor: ['#3ba755','#DAA520','#fe9339','#ea001e'] }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 } } } } }
-  });
+  // Order table (aggregate by order number, last 7 days, max 10)
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const weekAgoStr = weekAgo.toISOString().substring(0, 10);
 
-  // Order table (aggregate by order number, show most recent first)
-  document.getElementById('order-count').textContent = orderNums.size + ' orders';
+  const recentOrders = orders.filter(r => (r['受注日']||'') >= weekAgoStr);
   const orderAgg = {};
-  orders.forEach(r => {
+  recentOrders.forEach(r => {
     const num = r['受注番号'];
-    if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r[colCustomer], amount: 0, status: r[colStatus], deliveryDate: r['指定納期']||'' };
+    if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r[colCustomer], customerCode: r['得意先コード']||'', amount: 0, status: r[colStatus], deliveryDate: r['指定納期']||'' };
     orderAgg[num].amount += toNum(r[colAmount]);
   });
+  const recentList = Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0, 10);
+  document.getElementById('order-count').textContent = recentList.length + ' orders (直近1週間)';
   const tbody = document.querySelector('#table-orders tbody');
-  Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
+  recentList.forEach(r => {
     const tr = document.createElement('tr');
     const stClass = r.status === '完了' ? 'text-green' : 'text-red';
-    tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td>${r.customer}</td>
+    tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td><a href="#" onclick="openCustomerPage('${r.customer.replace(/'/g,"\\'")}','${r.customerCode}');return false;" style="color:#0176d3;text-decoration:none;">${r.customer}</a></td>
       <td class="text-right">${fmt(r.amount)}</td><td>${r.deliveryDate}</td><td class="${stClass}">${r.status}</td>`;
     tbody.appendChild(tr);
   });
