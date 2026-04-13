@@ -293,10 +293,13 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="kpi-row" id="kpi-orders"></div>
     <div class="grid-2">
       <div class="card full"><div class="card-header"><h3>Monthly Order Trend</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-monthly"></canvas></div></div>
-      <div class="card"><div class="card-header"><h3>Backlog by Customer (未完)</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>FY25 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy25"></canvas></div></div>
+      <div class="card"><div class="card-header"><h3>FY26 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy26"></canvas></div></div>
+    </div>
+    <div class="grid-2">
       <div class="card"><div class="card-header"><h3>Order Status Breakdown</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-status"></canvas></div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div class="badge" id="order-count"></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div class="badge" id="order-count"></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>指定納期</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
   </div>
 </div>
 
@@ -389,14 +392,16 @@ async function loadData() {
   const salesDetail = parseCSV(window._salesDetailText || '');
   // Store globally for drill-down
   window._custProduct = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));
-  window._orders = orders;
   window._salesDetail = salesDetail.filter(r => DENKI_DEPTS.includes(r['部門コード']));
 
-  // Orders are already filtered by department (DNK-E, DNK-E-N, DNK-E-S) during scraping
+  // Filter orders by DENKI_DEPTS (CSV now includes all departments)
+  const filteredOrders = orders.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  window._orders = filteredOrders;
+
   buildOverview(saleTotal, purchase, budget, customerSales, deptSales);
   buildBudget(budget, deptSales);
   buildCustomers(customerSales);
-  buildOrders(orders);
+  buildOrders(filteredOrders);
   buildPurchase(purchase);
 }
 
@@ -740,10 +745,13 @@ function openCustomerPage(name, code) {
   const profitTotal = salesSorted.reduce((s, r) => s + toNum(r['粗利益']), 0);
   const marginPct = salesTotalAmt > 0 ? (profitTotal / salesTotalAmt * 100) : 0;
 
-  // Orders data
-  const ordersData = (window._orders || []).filter(r => r['得意先名称'] === name);
-  const ordersSorted = ordersData.sort((a, b) => toNum(b['受注合計金額']) - toNum(a['受注合計金額']));
-  const ordersTotalAmt = ordersSorted.reduce((s, r) => s + toNum(r['受注合計金額']), 0);
+  // Orders data (support both old and new column names)
+  const _ocCustomer = (window._orders||[])[0] && '得意先名' in (window._orders||[])[0] ? '得意先名' : '得意先名称';
+  const _ocAmount = (window._orders||[])[0] && '小計' in (window._orders||[])[0] ? '小計' : '受注合計金額';
+  const _ocStatus = (window._orders||[])[0] && '納品状態' in (window._orders||[])[0] ? '納品状態' : '引当/計上';
+  const ordersData = (window._orders || []).filter(r => r[_ocCustomer] === name);
+  const ordersSorted = ordersData.sort((a, b) => toNum(b[_ocAmount]) - toNum(a[_ocAmount]));
+  const ordersTotalAmt = ordersSorted.reduce((s, r) => s + toNum(r[_ocAmount]), 0);
 
   // Summary cards
   document.getElementById('cp-sales').innerHTML = `${fmtOku(salesTotalAmt)} <span style="font-size:0.9rem;color:#666">(${fmt(salesTotalAmt)}円)</span>`;
@@ -783,9 +791,9 @@ function openCustomerPage(name, code) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${r['受注日']||''}</td>
       <td>${r['受注番号']||''}</td>
-      <td class="text-right">${fmt(toNum(r['受注合計金額']))}</td>
-      <td class="text-right">${fmt(toNum(r['原価計']))}</td>
-      <td>${r['引当/計上']||''}</td>`;
+      <td class="text-right">${fmt(toNum(r[_ocAmount]))}</td>
+      <td class="text-right">${fmt(toNum(r['原価計']||r['原価']||0))}</td>
+      <td>${r[_ocStatus]||''}</td>`;
     ordersTbody.appendChild(tr);
   });
 
@@ -890,17 +898,30 @@ function buildPurchase(purchase) {
 }
 
 function buildOrders(orders) {
-  const totalAmount = orders.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
+  // Column names from 指定納期出力用フォーマット CSV
+  const colCustomer = orders[0] && '得意先名' in orders[0] ? '得意先名' : '得意先名称';
+  const colAmount = orders[0] && '小計' in orders[0] ? '小計' : '受注合計金額';
+  const colStatus = orders[0] && '納品状態' in orders[0] ? '納品状態' : '引当/計上';
+  const colSlipAmount = orders[0] && '受注合計' in orders[0] ? '受注合計' : '受注合計金額';
+
+  const totalAmount = orders.reduce((s, r) => s + toNum(r[colAmount]), 0);
   const orderNums = new Set(orders.map(r => r['受注番号']));
-  const backlog = orders.filter(r => r['引当/計上'] !== '完了');
-  const completed = orders.filter(r => r['引当/計上'] === '完了');
-  const backlogAmount = backlog.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
-  const completedAmount = completed.reduce((s, r) => s + (toNum(r['受注合計金額'])), 0);
+
+  // Backlog: not completed, split by 指定納期 into FY25 (<= 2026-04-30) and FY26 (>= 2026-05-01)
+  const backlog = orders.filter(r => r[colStatus] !== '完了');
+  const completed = orders.filter(r => r[colStatus] === '完了');
+  const FY26_START = '2026-05-01';
+  const backlogFY25 = backlog.filter(r => !r['指定納期'] || r['指定納期'] < FY26_START);
+  const backlogFY26 = backlog.filter(r => r['指定納期'] && r['指定納期'] >= FY26_START);
+  const backlogFY25Amt = backlogFY25.reduce((s, r) => s + toNum(r[colAmount]), 0);
+  const backlogFY26Amt = backlogFY26.reduce((s, r) => s + toNum(r[colAmount]), 0);
+  const completedAmount = completed.reduce((s, r) => s + toNum(r[colAmount]), 0);
 
   document.getElementById('kpi-orders').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Total Orders (YTD)</div><div class="kpi-value">${fmtOku(totalAmount)}</div><div class="kpi-sub">${fmt(orderNums.size)} orders</div></div>
     <div class="kpi-card green"><div class="kpi-label">Completed (完了)</div><div class="kpi-value">${fmtOku(completedAmount)}</div><div class="kpi-sub">${completed.length} items</div></div>
-    <div class="kpi-card orange"><div class="kpi-label">Backlog (未完)</div><div class="kpi-value">${fmtOku(backlogAmount)}</div><div class="kpi-sub">${backlog.length} items</div></div>
+    <div class="kpi-card orange"><div class="kpi-label">FY25 受注残</div><div class="kpi-value">${fmtOku(backlogFY25Amt)}</div><div class="kpi-sub">${backlogFY25.length} items (〜2026/04)</div></div>
+    <div class="kpi-card red"><div class="kpi-label">FY26 受注残</div><div class="kpi-value">${fmtOku(backlogFY26Amt)}</div><div class="kpi-sub">${backlogFY26.length} items (2026/05〜)</div></div>
     <div class="kpi-card"><div class="kpi-label">Completion Rate</div><div class="kpi-value">${totalAmount>0?(completedAmount/totalAmount*100).toFixed(1):'0'}%</div></div>
   `;
 
@@ -908,7 +929,7 @@ function buildOrders(orders) {
   const monthlyOrders = {};
   orders.forEach(r => {
     const m = (r['受注日']||'').substring(0,7).replace('-','/');
-    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + (toNum(r['受注合計金額']));
+    if (m) monthlyOrders[m] = (monthlyOrders[m]||0) + toNum(r[colAmount]);
   });
   const months = Object.keys(monthlyOrders).sort();
   new Chart(document.getElementById('chart-order-monthly'), {
@@ -917,19 +938,23 @@ function buildOrders(orders) {
     options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
   });
 
-  // Backlog by customer
-  const backlogByCustomer = {};
-  backlog.forEach(r => { const n = r['得意先名称']; backlogByCustomer[n] = (backlogByCustomer[n]||0) + (toNum(r['受注合計金額'])); });
-  const blSorted = Object.entries(backlogByCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
-  new Chart(document.getElementById('chart-order-backlog'), {
-    type: 'bar',
-    data: { labels: blSorted.map(s => s[0].substring(0,15)), datasets: [{ data: blSorted.map(s => s[1]), backgroundColor: '#fe9339cc' }] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
-  });
+  // FY25 Backlog by customer
+  function buildBacklogChart(canvasId, data, color) {
+    const byCustomer = {};
+    data.forEach(r => { const n = r[colCustomer]; byCustomer[n] = (byCustomer[n]||0) + toNum(r[colAmount]); });
+    const sorted = Object.entries(byCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
+    new Chart(document.getElementById(canvasId), {
+      type: 'bar',
+      data: { labels: sorted.map(s => s[0].substring(0,15)), datasets: [{ data: sorted.map(s => s[1]), backgroundColor: color }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+    });
+  }
+  buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc');
+  buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc');
 
   // Order status pie
   const statusMap = {};
-  orders.forEach(r => { const s = r['引当/計上']||'不明'; statusMap[s] = (statusMap[s]||0) + (toNum(r['受注合計金額'])); });
+  orders.forEach(r => { const s = r[colStatus]||'不明'; statusMap[s] = (statusMap[s]||0) + toNum(r[colAmount]); });
   const statEntries = Object.entries(statusMap);
   new Chart(document.getElementById('chart-order-status'), {
     type: 'doughnut',
@@ -942,15 +967,15 @@ function buildOrders(orders) {
   const orderAgg = {};
   orders.forEach(r => {
     const num = r['受注番号'];
-    if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r['得意先名称'], amount: 0, status: r['引当/計上'] };
-    orderAgg[num].amount += toNum(r['受注合計金額']);
+    if (!orderAgg[num]) orderAgg[num] = { date: r['受注日'], num, customer: r[colCustomer], amount: 0, status: r[colStatus], deliveryDate: r['指定納期']||'' };
+    orderAgg[num].amount += toNum(r[colAmount]);
   });
   const tbody = document.querySelector('#table-orders tbody');
   Object.values(orderAgg).sort((a,b) => b.date.localeCompare(a.date)).slice(0,100).forEach(r => {
     const tr = document.createElement('tr');
     const stClass = r.status === '完了' ? 'text-green' : 'text-red';
     tr.innerHTML = `<td>${r.date}</td><td>${r.num}</td><td>${r.customer}</td>
-      <td class="text-right">${fmt(r.amount)}</td><td class="${stClass}">${r.status}</td>`;
+      <td class="text-right">${fmt(r.amount)}</td><td>${r.deliveryDate}</td><td class="${stClass}">${r.status}</td>`;
     tbody.appendChild(tr);
   });
 }

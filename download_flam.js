@@ -157,108 +157,93 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Sales detail download failed: ${e.message}`);
   }
 
-  // Orders: scrape from orders LIST page per department (sec= works here)
+  // Orders: download via form POST (指定納期出力用フォーマット)
   try {
-    console.log('=== Orders: scraping from list page per department ===');
-    const departments = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
-    let allRows = [];
-    let headers = null;
+    console.log('=== Orders: download via form POST ===');
 
-    for (const dept of departments) {
-      console.log(`  Loading orders list for dept: ${dept}`);
-      const url = `${FLAM_URL}/orders/view/?sd=2025%2F05%2F01&ed=&sec=${encodeURIComponent(dept)}&limit=10000`;
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
-      await page.waitForTimeout(3000);
+    // Navigate to orders export page
+    await page.goto(`${FLAM_URL}/orders/export`, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.waitForTimeout(2000);
 
-      // Get result count from page
-      const resultInfo = await page.evaluate(() => {
-        const text = document.body.innerText;
-        const match = text.match(/(\d+)\s*件.*の検索結果/);
-        return match ? match[0] : 'unknown';
-      });
-      console.log(`  ${dept}: ${resultInfo}`);
-
-      // Scrape ALL tables (same approach as analysis page that worked)
-      const tableData = await page.evaluate(() => {
-        const tables = document.querySelectorAll('table');
-        const results = [];
-        for (const table of tables) {
-          const rows = Array.from(table.querySelectorAll('tr'));
-          if (rows.length > 1) {
-            const data = rows.map(r => Array.from(r.querySelectorAll('th, td')).map(c => c.textContent.trim().replace(/\s+/g, ' ')));
-            if (data.length > 0 && data[0].length > 3) {
-              results.push(data);
-            }
-          }
-        }
-        return results;
-      });
-
-      console.log(`  Found ${tableData.length} tables`);
-      tableData.forEach((t, i) => console.log(`    Table ${i}: ${t.length} rows x ${t[0].length} cols, header: ${t[0].slice(0,5).join(' | ')}...`));
-
-      // Use the table with ~18 cols (data table), not 70 cols (search form)
-      const dataTables = tableData.filter(t => t.length > 3 && t[0].length < 30);
-      if (dataTables.length > 0) {
-        const table = dataTables.sort((a, b) => b.length - a.length)[0];
-        if (!headers) {
-          headers = table[0];
-          console.log(`  Headers (${headers.length}): ${headers.join(' | ')}`);
-          if (table.length > 1) {
-            console.log(`  Row0 (${table[1].length} cols): ${table[1].join(' | ')}`);
-          }
-        }
-        // Add data rows (skip header)
-        const dataRows = table.slice(1);
-        allRows = allRows.concat(dataRows);
-        console.log(`  ${dept}: ${dataRows.length} data rows`);
-      } else {
-        console.log(`  ${dept}: no usable table found`);
+    // Select 指定納期出力用フォーマット from dropdown and log available options
+    const formatInfo = await page.evaluate(() => {
+      const selects = document.querySelectorAll('select');
+      const info = [];
+      for (const sel of selects) {
+        const options = Array.from(sel.options).map(o => ({ value: o.value, text: o.text, selected: o.selected }));
+        info.push({ name: sel.name, id: sel.id, options });
       }
-    }
+      return info;
+    });
+    console.log('  Select elements:', JSON.stringify(formatInfo, null, 2));
 
-    if (headers && allRows.length > 0) {
-      console.log(`  Total: ${allRows.length} rows across ${departments.length} depts`);
+    // Find the format dropdown and select 指定納期出力用フォーマット
+    const response = await page.evaluate(async (baseUrl) => {
+      const form = document.querySelector('form');
+      const formDataObj = new FormData(form);
+      // Set start date
+      formDataObj.set('sd', '2025/05/01');
+      // Set file format to CSV
+      formDataObj.set('file-format', 'csv');
+      formDataObj.set('format', 'csv');
 
-      // Map column names: find key columns by name
-      const colMap = {};
-      headers.forEach((h, i) => { colMap[h] = i; });
-      console.log(`  Column indices: ${JSON.stringify(colMap)}`);
+      // Find and set the format dropdown to 指定納期出力用フォーマット
+      const selects = document.querySelectorAll('select');
+      for (const sel of selects) {
+        for (const opt of sel.options) {
+          if (opt.text.includes('指定納期')) {
+            formDataObj.set(sel.name, opt.value);
+            break;
+          }
+        }
+      }
 
-      // Create normalized CSV with standard column names
-      // Map from list page columns to our expected format
-      const orderDateIdx = headers.findIndex(h => h.includes('受注日'));
-      const orderNumIdx = headers.findIndex(h => h.includes('受注番号'));
-      const customerIdx = headers.findIndex(h => h.includes('得意先'));
-      const amountIdx = headers.findIndex(h => h.includes('受注合計金額'));
-      const costIdx = headers.findIndex(h => h.includes('原価計'));
-      const statusIdx = headers.lastIndexOf('引当');
-
-      console.log(`  Key columns: 受注日=${orderDateIdx}, 受注番号=${orderNumIdx}, 得意先=${customerIdx}, 金額=${amountIdx}, 原価=${costIdx}, 引当=${statusIdx}`);
-
-      // Build CSV with normalized headers
-      const csvHeaders = ['受注日', '受注番号', '得意先名称', '受注合計金額', '原価計', '引当/計上'];
-      const csvRows = allRows.map(row => {
-        return [
-          row[orderDateIdx] || '',
-          row[orderNumIdx] || '',
-          row[customerIdx] || '',
-          row[amountIdx] || '0',
-          row[costIdx] || '0',
-          row[statusIdx] || '',
-        ];
+      const res = await fetch(baseUrl + '/orders/export/exec', {
+        method: 'POST',
+        credentials: 'include',
+        body: formDataObj
       });
+      const buffer = await res.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(buffer));
+      return {
+        status: res.status,
+        contentType: res.headers.get('content-type'),
+        length: bytes.length,
+        bytes: bytes,
+        url: res.url
+      };
+    }, FLAM_URL);
 
-      const csvContent = [csvHeaders, ...csvRows].map(row => row.map(cell => `"${(cell||'').replace(/"/g, '""')}"`).join(',')).join('\n');
-      fs.writeFileSync(path.join(DATA_DIR, 'orders.csv'), csvContent, 'utf8');
-      console.log(`Downloaded: orders.csv (${csvContent.length} bytes, ${csvRows.length + 1} rows)`);
+    console.log(`  POST response: ${response.status}, type: ${response.contentType}, size: ${response.length}, url: ${response.url}`);
 
-      // Show sample normalized row
-      if (csvRows.length > 0) {
-        console.log(`  Sample: ${csvHeaders.map((h, i) => `${h}="${csvRows[0][i]}"`).join(', ')}`);
+    const filePath = path.join(DATA_DIR, 'orders.csv');
+
+    if (response.contentType && response.contentType.includes('text/csv')) {
+      fs.writeFileSync(filePath, Buffer.from(response.bytes));
+      const content = fs.readFileSync(filePath);
+      const text = new TextDecoder('shift_jis').decode(content);
+      fs.writeFileSync(filePath, text, 'utf8');
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0];
+      console.log(`  orders.csv: ${lines.length - 1} data rows`);
+      console.log(`  Headers: ${headers.substring(0, 300)}`);
+      // Check if 指定納期 is in headers
+      if (headers.includes('指定納期')) {
+        console.log('  ✓ 指定納期 column found!');
+      } else {
+        console.log('  WARNING: 指定納期 column NOT found in CSV');
       }
     } else {
-      console.log('  WARNING: Could not get orders data');
+      const rawText = Buffer.from(response.bytes).toString('utf8');
+      console.log(`  Response start: ${rawText.substring(0, 200)}`);
+      const text = new TextDecoder('shift_jis').decode(Buffer.from(response.bytes));
+      if (text.includes('受注番号') || text.includes('受注日')) {
+        fs.writeFileSync(filePath, text, 'utf8');
+        const lines = text.split('\n').filter(l => l.trim());
+        console.log(`  orders.csv: ${lines.length - 1} data rows (detected as CSV)`);
+      } else {
+        console.log('  Response is not CSV');
+      }
     }
   } catch (e) {
     console.log(`  Orders download failed: ${e.message}`);
