@@ -352,28 +352,48 @@ function showTab(id, el) {
   el.classList.add('active');
 }
 
-// === Generic Drill-Down ===
+// === Generic Drill-Down (supports multi-level) ===
 let _ddPrevSection = null;
-function openDrillDown(title, subtitle, rows, columns, kpiHtml) {
-  _ddPrevSection = document.querySelector('.section.active');
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelector('.navbar').style.display = 'none';
-  document.getElementById('drilldown-page').classList.add('active');
+const _ddHistory = []; // stack for multi-level drill-down
+function openDrillDown(title, subtitle, rows, columns, kpiHtml, onRowClick) {
+  // Save current state for back navigation
+  if (document.getElementById('drilldown-page').classList.contains('active')) {
+    // Already in drill-down: push current state to history
+    _ddHistory.push({
+      title: document.getElementById('dd-title').textContent,
+      subtitle: document.getElementById('dd-subtitle').textContent,
+      kpi: document.getElementById('dd-kpi').innerHTML,
+      count: document.getElementById('dd-count').textContent,
+      thead: document.getElementById('dd-thead').innerHTML,
+      tbody: document.getElementById('dd-tbody').innerHTML,
+      tableTitle: document.getElementById('dd-table-title').textContent
+    });
+  } else {
+    _ddPrevSection = document.querySelector('.section.active');
+    _ddHistory.length = 0;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelector('.navbar').style.display = 'none';
+    document.getElementById('drilldown-page').classList.add('active');
+  }
   document.getElementById('dd-title').textContent = title;
   document.getElementById('dd-subtitle').textContent = subtitle;
   document.getElementById('dd-kpi').innerHTML = kpiHtml || '';
   document.getElementById('dd-count').textContent = rows.length + ' items';
   document.getElementById('dd-table-title').textContent = title;
-  // Build table header
   const thead = document.getElementById('dd-thead');
   thead.innerHTML = '<tr>' + columns.map(c =>
     `<th class="${c.align==='right'?'text-right':''}">${c.label}</th>`
   ).join('') + '</tr>';
-  // Build table body
   const tbody = document.getElementById('dd-tbody');
   tbody.innerHTML = '';
   rows.forEach(r => {
     const tr = document.createElement('tr');
+    if (onRowClick) {
+      tr.style.cursor = 'pointer';
+      tr.onmouseover = () => tr.style.background = '#f5f0e0';
+      tr.onmouseout = () => tr.style.background = '';
+      tr.onclick = () => onRowClick(r);
+    }
     tr.innerHTML = columns.map(c => {
       const v = typeof c.value === 'function' ? c.value(r) : (r[c.key] || '');
       return `<td class="${c.align==='right'?'text-right':''}">${v}</td>`;
@@ -383,17 +403,48 @@ function openDrillDown(title, subtitle, rows, columns, kpiHtml) {
   window.scrollTo(0, 0);
 }
 function closeDrillDown() {
-  document.getElementById('drilldown-page').classList.remove('active');
-  document.querySelector('.navbar').style.display = '';
-  if (_ddPrevSection) _ddPrevSection.classList.add('active');
-  else document.getElementById('overview').classList.add('active');
-  _ddPrevSection = null;
+  if (_ddHistory.length > 0) {
+    // Go back one level
+    const prev = _ddHistory.pop();
+    document.getElementById('dd-title').textContent = prev.title;
+    document.getElementById('dd-subtitle').textContent = prev.subtitle;
+    document.getElementById('dd-kpi').innerHTML = prev.kpi;
+    document.getElementById('dd-count').textContent = prev.count;
+    document.getElementById('dd-table-title').textContent = prev.tableTitle;
+    document.getElementById('dd-thead').innerHTML = prev.thead;
+    document.getElementById('dd-tbody').innerHTML = prev.tbody;
+    window.scrollTo(0, 0);
+  } else {
+    document.getElementById('drilldown-page').classList.remove('active');
+    document.querySelector('.navbar').style.display = '';
+    if (_ddPrevSection) _ddPrevSection.classList.add('active');
+    else document.getElementById('overview').classList.add('active');
+    _ddPrevSection = null;
+  }
 }
-// Helper: get month string from chart click
-function chartClickMonth(chart, elements) {
-  if (!elements || !elements.length) return null;
-  const label = chart.data.labels[elements[0].index];
-  return label;
+// Drill-down row click handlers for 2nd level detail
+function deptSalesRowClick(r) {
+  const dept = r['部門コード'], m = r['集計年月'];
+  const detail = (window._salesDetail||[]).filter(d => d['部門コード'] === dept && (d['売上日']||'').substring(0,7).replace('-','/') === m);
+  openDrillDown(monthLabel(m) + ' ' + dept + ' 売上伝票明細', '売上伝票ドリルダウン', detail, [
+    {label:'売上日', key:'売上日'}, {label:'売上番号', key:'売上番号'}, {label:'得意先', key:'得意先名'},
+    {label:'商品名', value: r => (r['商品名']||'').substring(0,25)},
+    {label:'数量', align:'right', value: r => fmt(toNum(r['数量']))},
+    {label:'単価', align:'right', value: r => fmt(toNum(r['単価']))},
+    {label:'小計', align:'right', value: r => fmt(toNum(r['小計']))},
+    {label:'原価', align:'right', value: r => fmt(toNum(r['原価']))},
+    {label:'仕入先', key:'商品の仕入先名'}
+  ]);
+}
+function purchaseRowClick(r) {
+  const supplier = r['仕入先名'], m = r['集計年月'];
+  const detail = (window._purchase||[]).filter(d => d['仕入先名'] === supplier && d['集計年月'] === m);
+  openDrillDown(supplier + ' ' + monthLabel(m) + ' 仕入明細', '仕入ドリルダウン', detail, [
+    {label:'部門', key:'部門コード'}, {label:'仕入先', key:'仕入先名'},
+    {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
+    {label:'数量', align:'right', value: r => fmt(toNum(r['純仕入数']))},
+    {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
+  ]);
 }
 
 function parseCSV(text) {
@@ -587,11 +638,11 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
         if (!elements.length) return;
         const m = months[elements[0].index];
         const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
-        openDrillDown(monthLabel(m) + ' 売上明細', '部門別売上', rows, [
+        openDrillDown(monthLabel(m) + ' 売上明細', '部門別売上 → 行クリックで伝票明細', rows, [
           {label:'部門', key:'部門コード'}, {label:'純売上額', key:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'原価計', key:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
           {label:'粗利益', key:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -616,11 +667,11 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
         if (!elements.length) return;
         const m = profitMonths[elements[0].index];
         const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
-        openDrillDown(monthLabel(m) + ' 粗利明細', '部門別粗利', rows, [
+        openDrillDown(monthLabel(m) + ' 粗利明細', '部門別粗利 → 行クリックで伝票明細', rows, [
           {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))},
           {label:'粗利率', align:'right', value: r => { const s = toNum(r['純売上額']); return s > 0 ? (toNum(r['粗利益'])/s*100).toFixed(1)+'%' : '-'; }}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -659,12 +710,12 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
         const name = top[elements[0].index][0];
         if (name === 'その他') return;
         const rows = (window._purchase||[]).filter(r => r['仕入先名'] === name);
-        openDrillDown(name + ' 仕入明細', '仕入先ドリルダウン', rows, [
+        openDrillDown(name + ' 仕入明細', '仕入先ドリルダウン → 行クリックで詳細', rows, [
           {label:'集計年月', key:'集計年月'}, {label:'部門', key:'部門コード'},
           {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
           {label:'数量', align:'right', value: r => fmt(toNum(r['数量']))},
           {label:'件数', align:'right', value: r => fmt(toNum(r['件数']))}
-        ]);
+        ], '', purchaseRowClick);
       }
     }
   });
@@ -723,11 +774,11 @@ function buildBudget(budget, deptSales) {
         if (!elements.length) return;
         const m = months[elements[0].index];
         const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
-        openDrillDown(monthLabel(m) + ' 予算vs実績', '部門別詳細', rows, [
+        openDrillDown(monthLabel(m) + ' 予算vs実績', '部門別詳細 → 行クリックで伝票明細', rows, [
           {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -758,7 +809,7 @@ function buildBudget(budget, deptSales) {
         openDrillDown(monthLabel(m) + ' 累計詳細', '部門別売上', rows, [
           {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -782,7 +833,7 @@ function buildBudget(budget, deptSales) {
         openDrillDown(monthLabel(m) + ' 達成率詳細', '部門別売上', rows, [
           {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -838,7 +889,7 @@ function buildBudget(budget, deptSales) {
           {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -858,7 +909,7 @@ function buildBudget(budget, deptSales) {
           {label:'集計年月', key:'集計年月'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
           {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
           {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
-        ]);
+        ], '', deptSalesRowClick);
       }
     }
   });
@@ -1073,7 +1124,7 @@ function buildPurchase(purchase) {
           {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
           {label:'数量', align:'right', value: r => fmt(toNum(r['純仕入数']))},
           {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
-        ]);
+        ], '', purchaseRowClick);
       }
     }
   });
@@ -1092,7 +1143,7 @@ function buildPurchase(purchase) {
           {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
           {label:'数量', align:'right', value: r => fmt(toNum(r['純仕入数']))},
           {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
-        ]);
+        ], '', purchaseRowClick);
       }
     }
   });
@@ -1110,7 +1161,7 @@ function buildPurchase(purchase) {
           {label:'仕入先', key:'仕入先名'}, {label:'部門', key:'部門コード'},
           {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
           {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
-        ]);
+        ], '', purchaseRowClick);
       }
     }
   });
