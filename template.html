@@ -284,6 +284,28 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
 </div>
 
+<!-- DRILLDOWN PAGE (generic detail view) -->
+<div id="drilldown-page" class="section">
+  <div class="page-header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button onclick="closeDrillDown()" style="background:none; border:2px solid #DAA520; color:#DAA520; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">← 戻る</button>
+      <div>
+        <h2 id="dd-title" style="margin:0;"></h2>
+        <div class="subtitle" id="dd-subtitle"></div>
+      </div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="kpi-row" id="dd-kpi"></div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><h3 id="dd-table-title">Detail</h3><div class="badge" id="dd-count"></div></div>
+      <div class="card-body">
+        <table id="dd-table"><thead id="dd-thead"></thead><tbody id="dd-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- PURCHASING -->
 <div id="purchase" class="section">
   <div class="page-header"><h2>Purchasing Analysis</h2><div class="subtitle">Supplier performance and procurement trends</div></div>
@@ -328,6 +350,50 @@ function showTab(id, el) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
+}
+
+// === Generic Drill-Down ===
+let _ddPrevSection = null;
+function openDrillDown(title, subtitle, rows, columns, kpiHtml) {
+  _ddPrevSection = document.querySelector('.section.active');
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelector('.navbar').style.display = 'none';
+  document.getElementById('drilldown-page').classList.add('active');
+  document.getElementById('dd-title').textContent = title;
+  document.getElementById('dd-subtitle').textContent = subtitle;
+  document.getElementById('dd-kpi').innerHTML = kpiHtml || '';
+  document.getElementById('dd-count').textContent = rows.length + ' items';
+  document.getElementById('dd-table-title').textContent = title;
+  // Build table header
+  const thead = document.getElementById('dd-thead');
+  thead.innerHTML = '<tr>' + columns.map(c =>
+    `<th class="${c.align==='right'?'text-right':''}">${c.label}</th>`
+  ).join('') + '</tr>';
+  // Build table body
+  const tbody = document.getElementById('dd-tbody');
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = columns.map(c => {
+      const v = typeof c.value === 'function' ? c.value(r) : (r[c.key] || '');
+      return `<td class="${c.align==='right'?'text-right':''}">${v}</td>`;
+    }).join('');
+    tbody.appendChild(tr);
+  });
+  window.scrollTo(0, 0);
+}
+function closeDrillDown() {
+  document.getElementById('drilldown-page').classList.remove('active');
+  document.querySelector('.navbar').style.display = '';
+  if (_ddPrevSection) _ddPrevSection.classList.add('active');
+  else document.getElementById('overview').classList.add('active');
+  _ddPrevSection = null;
+}
+// Helper: get month string from chart click
+function chartClickMonth(chart, elements) {
+  if (!elements || !elements.length) return null;
+  const label = chart.data.labels[elements[0].index];
+  return label;
 }
 
 function parseCSV(text) {
@@ -405,6 +471,10 @@ async function loadData() {
   // Store globally for drill-down
   window._custProduct = custProduct.filter(r => DENKI_DEPTS.includes(r['部門コード']));
   window._salesDetail = salesDetail.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  window._deptSales = deptSales.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  window._purchase = purchase.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  window._customerSales = customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+  window._budget = budget;
 
   // Filter orders by DENKI_DEPTS (CSV now includes all departments)
   const filteredOrders = orders.filter(r => DENKI_DEPTS.includes(r['部門コード']));
@@ -512,7 +582,18 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
         { label: 'Budget', data: months.map(() => monthlyBudget), borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], type: 'line', fill: false, pointStyle: 'circle', pointRadius: 3, pointBackgroundColor: '#ea001e' },
       ]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 売上明細', '部門別売上', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', key:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'原価計', key:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
+          {label:'粗利益', key:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
 
   // Profit chart
@@ -530,7 +611,18 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
       labels: profitMonths.map(monthLabel),
       datasets: [{ label: 'Gross Profit', data: profitMonths.map(m => monthlyMap[m]?.profit || 0), borderColor: '#3ba755', backgroundColor: '#3ba75522', fill: true, tension: 0.3 }]
     },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = profitMonths[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 粗利明細', '部門別粗利', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))},
+          {label:'粗利率', align:'right', value: r => { const s = toNum(r['純売上額']); return s > 0 ? (toNum(r['粗利益'])/s*100).toFixed(1)+'%' : '-'; }}
+        ]);
+      }
+    }
   });
 
   // Customer pie (得意先別売上) - 電力系部門のみ
@@ -561,7 +653,20 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   new Chart(document.getElementById('chart-supplier-pie'), {
     type: 'doughnut',
     data: { labels: top.map(s => s[0]), datasets: [{ data: top.map(s => s[1]), backgroundColor: COLORS }] },
-    options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } } }
+    options: { responsive: true, maintainAspectRatio: true, layout: { padding: 0 }, plugins: { legend: { display: false } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const name = top[elements[0].index][0];
+        if (name === 'その他') return;
+        const rows = (window._purchase||[]).filter(r => r['仕入先名'] === name);
+        openDrillDown(name + ' 仕入明細', '仕入先ドリルダウン', rows, [
+          {label:'集計年月', key:'集計年月'}, {label:'部門', key:'部門コード'},
+          {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
+          {label:'数量', align:'right', value: r => fmt(toNum(r['数量']))},
+          {label:'件数', align:'right', value: r => fmt(toNum(r['件数']))}
+        ]);
+      }
+    }
   });
 
   // Custom HTML legends
@@ -613,7 +718,18 @@ function buildBudget(budget, deptSales) {
         { label: 'Budget', data: monthlyBudgets, type: 'line', borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], fill: false, pointStyle: 'circle', pointRadius: 4, pointBackgroundColor: '#ea001e' },
       ]
     },
-    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 予算vs実績', '部門別詳細', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
 
   // Cumulative chart
@@ -634,7 +750,17 @@ function buildBudget(budget, deptSales) {
         { label: 'Cumulative Budget', data: cumBudgets, borderColor: '#ea001e', borderDash: [6,3], fill: false, tension: 0 },
       ]
     },
-    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+    options: { responsive: true, plugins: { legend: { labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 累計詳細', '部門別売上', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
 
   // Achievement rate chart
@@ -648,7 +774,17 @@ function buildBudget(budget, deptSales) {
         backgroundColor: monthlyActuals.map((v, i) => { const r = monthlyBudgets[i] > 0 ? v / monthlyBudgets[i] * 100 : 0; return r >= 100 ? '#3ba755cc' : r >= 80 ? '#DAA520cc' : '#fe9339cc'; }),
       }]
     },
-    options: { responsive: true, scales: { y: { min: 0, max: 200, ticks: { callback: v => v + '%' } } } }
+    options: { responsive: true, scales: { y: { min: 0, max: 200, ticks: { callback: v => v + '%' } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 達成率詳細', '部門別売上', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
 
   // Budget table
@@ -693,7 +829,18 @@ function buildBudget(budget, deptSales) {
   new Chart(document.getElementById('chart-office-trend'), {
     type: 'line',
     data: { labels: offMonths.map(monthLabel), datasets: DENKI_DEPTS.map((code,i) => ({ label: officeNames[code], data: offMonths.map(m => officeMonthly[code]?.[m]||0), borderColor: offColors[i], tension: 0.3, fill: false })) },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = offMonths[elements[0].index];
+        const rows = (window._deptSales||[]).filter(r => r['集計年月'] === m && DENKI_DEPTS.includes(r['部門コード']));
+        openDrillDown(monthLabel(m) + ' 拠点別売上', '拠点ドリルダウン', rows, [
+          {label:'部門', key:'部門コード'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
 
   // Office composition donut
@@ -701,7 +848,19 @@ function buildBudget(budget, deptSales) {
   new Chart(document.getElementById('chart-office-pie'), {
     type: 'doughnut',
     data: { labels: offEntries.map(e => e[0]), datasets: [{ data: offEntries.map(e => e[1]), backgroundColor: offColors }] },
-    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const code = DENKI_DEPTS[elements[0].index];
+        const name = officeNames[code];
+        const rows = (window._deptSales||[]).filter(r => r['部門コード'] === code);
+        openDrillDown(name + ' 売上明細', '拠点ドリルダウン', rows, [
+          {label:'集計年月', key:'集計年月'}, {label:'純売上額', align:'right', value: r => fmt(toNum(r['純売上額']))},
+          {label:'原価計', align:'right', value: r => fmt(toNum(r['原価計']))},
+          {label:'粗利益', align:'right', value: r => fmt(toNum(r['粗利益']))}
+        ]);
+      }
+    }
   });
   document.getElementById('legend-office').innerHTML = offEntries.map((e,i) => `<div class="legend-item"><span class="legend-dot" style="background:${offColors[i]}"></span>${e[0]}: ${fmtOku(e[1])}</div>`).join('');
 }
@@ -904,20 +1063,56 @@ function buildPurchase(purchase) {
   new Chart(document.getElementById('chart-purchase-monthly'), {
     type: 'line',
     data: { labels: months.map(monthLabel), datasets: topNames.map((n,i) => ({ label: n, data: months.map(m => supplierMonthly[n]?.[m]||0), borderColor: COLORS[i], tension: 0.3, fill: false })) },
-    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = purchase.filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 仕入明細', '月次仕入ドリルダウン', rows, [
+          {label:'仕入先', key:'仕入先名'}, {label:'部門', key:'部門コード'},
+          {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
+          {label:'数量', align:'right', value: r => fmt(toNum(r['純仕入数']))},
+          {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
+        ]);
+      }
+    }
   });
   const sortedAll = Object.entries(supplierTotals).sort((a,b) => b[1]-a[1]).slice(0,15);
+  const fullSupNames = sortedAll.map(s => s[0]);
   new Chart(document.getElementById('chart-purchase-rank'), {
     type: 'bar',
     data: { labels: sortedAll.map(s => s[0].substring(0,15)), datasets: [{ data: sortedAll.map(s => s[1]), backgroundColor: '#e8006fcc' }] },
-    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const name = fullSupNames[elements[0].index];
+        const rows = purchase.filter(r => r['仕入先名'] === name);
+        openDrillDown(name + ' 仕入明細', '仕入先ドリルダウン', rows, [
+          {label:'集計年月', key:'集計年月'}, {label:'部門', key:'部門コード'},
+          {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
+          {label:'数量', align:'right', value: r => fmt(toNum(r['純仕入数']))},
+          {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
+        ]);
+      }
+    }
   });
   const monthlyCount = {};
   purchase.forEach(r => { const m = r['集計年月']; monthlyCount[m] = (monthlyCount[m]||0) + (parseInt(r['明細数'])||0); });
   new Chart(document.getElementById('chart-purchase-count'), {
     type: 'bar',
     data: { labels: months.map(monthLabel), datasets: [{ label: 'Orders', data: months.map(m => monthlyCount[m]||0), backgroundColor: '#fe9339cc' }] },
-    options: { responsive: true }
+    options: { responsive: true,
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = purchase.filter(r => r['集計年月'] === m);
+        openDrillDown(monthLabel(m) + ' 発注件数明細', '月次発注ドリルダウン', rows, [
+          {label:'仕入先', key:'仕入先名'}, {label:'部門', key:'部門コード'},
+          {label:'純仕入額', align:'right', value: r => fmt(toNum(r['純仕入額']))},
+          {label:'件数', align:'right', value: r => fmt(parseInt(r['明細数'])||0)}
+        ]);
+      }
+    }
   });
   const agg = {};
   purchase.forEach(r => {
@@ -971,22 +1166,47 @@ function buildOrders(orders) {
   new Chart(document.getElementById('chart-order-monthly'), {
     type: 'bar',
     data: { labels: months.map(monthLabel), datasets: [{ label: 'Order Amount', data: months.map(m => monthlyOrders[m]||0), backgroundColor: '#DAA520cc', barPercentage: 0.5 }] },
-    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } } }
+    options: { responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { callback: v => fmtM(v) } } },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const m = months[elements[0].index];
+        const rows = orders.filter(r => (r['受注日']||'').substring(0,7).replace('-','/') === m);
+        openDrillDown(monthLabel(m) + ' 受注明細', '月次受注ドリルダウン', rows, [
+          {label:'受注日', key:'受注日'}, {label:'受注番号', key:'受注番号'}, {label:'得意先', value: r => r[colCustomer]},
+          {label:'商品名', value: r => (r['商品名']||'').substring(0,25)},
+          {label:'金額', align:'right', value: r => fmt(toNum(r[colAmount]))},
+          {label:'指定納期', key:'指定納期'}, {label:'状態', value: r => r[colStatus]}
+        ]);
+      }
+    }
   });
 
-  // FY25 Backlog by customer
-  function buildBacklogChart(canvasId, data, color) {
+  // FY25/FY26 Backlog by customer
+  function buildBacklogChart(canvasId, data, color, fyLabel) {
     const byCustomer = {};
     data.forEach(r => { const n = r[colCustomer]; byCustomer[n] = (byCustomer[n]||0) + toNum(r[colAmount]); });
     const sorted = Object.entries(byCustomer).sort((a,b) => b[1]-a[1]).slice(0,10);
+    const fullNames = sorted.map(s => s[0]);
     new Chart(document.getElementById(canvasId), {
       type: 'bar',
       data: { labels: sorted.map(s => s[0].substring(0,15)), datasets: [{ data: sorted.map(s => s[1]), backgroundColor: color }] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } } }
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => fmtM(v) } } },
+        onClick: (e, elements) => {
+          if (!elements.length) return;
+          const custName = fullNames[elements[0].index];
+          const rows = data.filter(r => r[colCustomer] === custName);
+          openDrillDown(custName + ' ' + fyLabel + '受注残', '得意先受注残ドリルダウン', rows, [
+            {label:'受注日', key:'受注日'}, {label:'受注番号', key:'受注番号'},
+            {label:'商品名', value: r => (r['商品名']||'').substring(0,25)},
+            {label:'金額', align:'right', value: r => fmt(toNum(r[colAmount]))},
+            {label:'指定納期', key:'指定納期'}, {label:'状態', value: r => r[colStatus]}
+          ]);
+        }
+      }
     });
   }
-  buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc');
-  buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc');
+  buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc', 'FY25');
+  buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc', 'FY26');
 
   // Order table (aggregate by order number, last 7 days, max 10)
   const today = new Date();
