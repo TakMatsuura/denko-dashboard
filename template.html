@@ -166,14 +166,12 @@ tr:hover td { background: #f3f3f3; }
   #customer-page .content > div:first-child > div:last-child { grid-column: 1 / -1; }
   #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 1.2rem !important; }
 
-  /* Pie + legend layout: stack vertically */
-  .card-body[style*="display:flex"] { flex-direction: column !important; }
-  .card-body[style*="display:flex"] > div:first-child { flex: none !important; max-height: 160px !important; width: 160px; margin: 0 auto; }
-  .legend-grid { grid-template-columns: 1fr; font-size: 11px; max-width: 100%; overflow: hidden; }
-  .legend-item { max-width: calc(100vw - 60px); }
-
-  /* Remove fixed height on pie chart cards so content can flow */
-  .card-body[style*="display:flex"] { height: auto !important; min-height: 0; }
+  /* Pie + legend layout: side by side with smaller chart */
+  .card-body[style*="display:flex"] { height: auto !important; min-height: 0; flex-direction: row !important; align-items: flex-start !important; gap: 6px !important; }
+  .card-body[style*="display:flex"] > div:first-child { flex: 0 0 110px !important; max-height: 110px !important; width: 110px !important; }
+  .legend-grid { grid-template-columns: 1fr; font-size: 10px; max-width: 100%; overflow: hidden; flex: 1; min-width: 0; }
+  .legend-item { max-width: 100%; }
+  .legend-dot { width: 8px; height: 8px; }
 
   /* Gauge charts */
   .gauge-wrap canvas { max-height: 100px; margin-bottom: 20px; }
