@@ -33,6 +33,7 @@ body { font-family: 'Salesforce Sans', 'SF Pro Display', -apple-system, 'Segoe U
 .navbar .nav-tab:hover { color: #fff; background: rgba(255,255,255,0.08); }
 .navbar .nav-tab.active { color: #fff; border-bottom-color: var(--sf-blue); }
 .navbar .nav-right { margin-left: auto; color: rgba(255,255,255,0.6); font-size: 12px; }
+.navbar .menu-toggle { display: none; }
 
 /* Page Header */
 .page-header { background: var(--sf-white); border-bottom: 1px solid var(--sf-border); padding: 10px 16px; }
@@ -104,7 +105,82 @@ tr:hover td { background: #f3f3f3; }
 .gauge-footer { text-align: center; font-size: 10px; color: var(--sf-muted); margin-top: 2px; }
 .gauge-footer a { color: var(--sf-blue); text-decoration: none; font-weight: 500; }
 
+/* ===== Tablet Responsive (iPad etc.) ===== */
+@media (max-width: 1024px) {
+  .grid-3 { grid-template-columns: 1fr 1fr; }
+  td { font-size: 12px; }
+  th { font-size: 10px; }
+  .kpi-card .kpi-value { font-size: 16px; }
+  #customer-page .content > div:first-child { grid-template-columns: repeat(3, 1fr) !important; }
+  #customer-page .content > div:first-child > div:nth-child(4),
+  #customer-page .content > div:first-child > div:nth-child(5) { grid-column: auto; }
+}
 @media (max-width: 1000px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  body { font-size: 13px; }
+
+  /* Navbar: hamburger menu */
+  .navbar { height: auto; min-height: 44px; flex-wrap: wrap; padding: 0 12px; gap: 0; }
+  .navbar .logo { font-size: 14px; padding: 8px 0; }
+  .navbar .nav-tabs { display: none; width: 100%; order: 3; flex-direction: column; gap: 0; }
+  .navbar .nav-tabs.open { display: flex; }
+  .navbar .nav-tab { height: 40px; padding: 0 12px; font-size: 13px; border-bottom: none; border-left: 3px solid transparent; }
+  .navbar .nav-tab.active { border-left-color: var(--sf-blue); border-bottom-color: transparent; }
+  .navbar .nav-right { display: none; }
+  .navbar .menu-toggle { display: flex; align-items: center; justify-content: center; margin-left: auto; color: #fff; font-size: 22px; cursor: pointer; padding: 8px; -webkit-tap-highlight-color: transparent; }
+
+  /* Page header */
+  .page-header { padding: 10px 12px; }
+  .page-header h2 { font-size: 16px; }
+  .page-header .subtitle { font-size: 12px; }
+
+  /* Content */
+  .content { padding: 8px; }
+
+  /* KPI cards */
+  .kpi-row { grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  .kpi-card { padding: 8px 10px; }
+  .kpi-card .kpi-value { font-size: 16px; }
+  .kpi-card .kpi-label { font-size: 9px; }
+
+  /* Grids */
+  .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 8px; margin-bottom: 8px; }
+
+  /* Cards */
+  .card-header { padding: 8px 10px; }
+  .card-header h3 { font-size: 13px; }
+  .card-body { padding: 8px; }
+
+  /* Tables: horizontal scroll */
+  .card-body:has(table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  td { padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+  th { padding: 4px 8px; font-size: 9px; }
+
+  /* Chart height adjustments */
+  .card-body canvas { max-height: 220px; }
+
+  /* Customer page 5-col → 2-col */
+  #customer-page .content > div:first-child { grid-template-columns: 1fr 1fr !important; }
+  #customer-page .content > div:first-child > div:last-child { grid-column: 1 / -1; }
+  #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 1.2rem !important; }
+
+  /* Pie + legend layout: stack vertically */
+  .card-body[style*="display:flex"] { flex-direction: column !important; }
+  .card-body[style*="display:flex"] > div:first-child { flex: none !important; max-height: 160px !important; width: 160px; margin: 0 auto; }
+  .legend-grid { grid-template-columns: 1fr; font-size: 11px; }
+
+  /* Gauge charts */
+  .gauge-wrap canvas { max-height: 100px; margin-bottom: 20px; }
+  .gauge-center .gauge-val { font-size: 16px; }
+
+  /* Login screen */
+  #login-screen > div { width: 90% !important; max-width: 360px; padding: 28px 20px !important; }
+
+  /* Drill-down back button */
+  #drilldown-page button, #customer-page button { padding: 8px 16px; font-size: 14px; }
+}
 </style>
 </head>
 <body>
@@ -158,6 +234,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <img src="denko_logo.png" alt="DENKO" style="height:28px;border-radius:4px;filter:invert(1)">
     Electric Industry Dept.
   </div>
+  <div class="menu-toggle" onclick="document.querySelector('.nav-tabs').classList.toggle('open')">&#9776;</div>
   <div class="nav-tabs">
     <div class="nav-tab active" onclick="showTab('overview',this)">Overview</div>
     <div class="nav-tab" onclick="showTab('budget',this)">Budget</div>
@@ -350,6 +427,7 @@ function showTab(id, el) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
+  document.querySelector('.nav-tabs').classList.remove('open');
 }
 
 // === Generic Drill-Down (supports multi-level) ===
