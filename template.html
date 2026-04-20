@@ -222,10 +222,23 @@ tr:hover td { background: #f3f3f3; }
   .gauge-center .gauge-pct { font-size: 8px !important; }
   /* Grid gap */
   .grid-2, .grid-3 { gap: 4px !important; margin-bottom: 4px !important; }
-  /* Customer page 5-cols summary: shrink */
-  #customer-page .content > div:first-child { gap: 4px !important; margin-bottom: 4px !important; }
+  /* Customer page 5-cols summary: force 5 columns */
+  #customer-page .content > div:first-child {
+    display: grid !important;
+    grid-template-columns: repeat(5, 1fr) !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+  }
+  #customer-page .content > div:first-child > div { grid-column: auto !important; }
   #customer-page .content > div:first-child > div .card-body { padding: 4px 6px !important; }
   #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 11px !important; }
+  /* Force 2-col for grid-2 in print */
+  .grid-2 { grid-template-columns: 1fr 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr !important; }
+  /* Keep tables together - try to avoid breaks but allow if needed */
+  table { page-break-inside: auto !important; }
+  thead { display: table-header-group !important; }
+  tbody tr { page-break-inside: avoid !important; }
   /* Pie + legend layout in print: side-by-side, compact */
   .card-body[style*="display:flex"] { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; height: auto !important; }
   .card-body[style*="display:flex"] > div:first-child { flex: 0 0 140px !important; max-height: 140px !important; }
