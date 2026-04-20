@@ -184,6 +184,44 @@ tr:hover td { background: #f3f3f3; }
   /* Drill-down back button */
   #drilldown-page button, #customer-page button { padding: 8px 16px; font-size: 14px; }
 }
+
+/* ===== Print CSS ===== */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: #fff !important; font-size: 10px; }
+  /* Hide navbar, login, and non-active sections */
+  .navbar, #login-screen { display: none !important; }
+  .section:not(.active) { display: none !important; }
+  /* Hide buttons and interactive elements */
+  button, .menu-toggle { display: none !important; }
+  /* Page header: compact */
+  .page-header { padding: 6px 0; border-bottom: 2px solid #DAA520; }
+  .page-header h2 { font-size: 16px; }
+  .content { padding: 8px 0; }
+  /* Cards: no shadow, thin border for print */
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; page-break-inside: avoid; }
+  .card-header { background: #faf5e0 !important; padding: 6px 10px !important; }
+  .card-header h3 { font-size: 11px !important; }
+  .card-body { padding: 6px !important; }
+  /* KPIs smaller */
+  .kpi-card { padding: 6px 10px !important; box-shadow: none !important; border: 1px solid #ccc !important; }
+  .kpi-card .kpi-value { font-size: 13px !important; }
+  .kpi-card .kpi-label { font-size: 8px !important; }
+  /* Tables compact */
+  td, th { padding: 3px 6px !important; font-size: 9px !important; }
+  /* Charts: force height so they render */
+  canvas { max-height: 250px !important; }
+  .gauge-wrap canvas { max-height: 120px !important; }
+  /* Page break after major sections */
+  .grid-2, .grid-3 { page-break-inside: avoid; }
+  /* Keep full width */
+  body, #dashboard-main { width: 100% !important; max-width: none !important; }
+  /* Customer page 5-cols summary: shrink */
+  #customer-page .content > div:first-child > div { padding: 4px !important; }
+  #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 13px !important; }
+  /* Force colors in print (Chrome) */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
 </style>
 </head>
 <body>
@@ -308,7 +346,10 @@ if (sessionStorage.getItem('denko-auth') === '1') {
         <h2 id="cp-name" style="margin:0;"></h2>
         <div class="subtitle" id="cp-subtitle"></div>
       </div>
-      <button onclick="downloadCustomerReport()" style="background:#DAA520; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">📊 レポート出力 (Excel)</button>
+      <div style="display:flex; gap:8px;">
+        <button onclick="printCustomerReport()" style="background:#2e844a; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">🖨 印刷 / PDF</button>
+        <button onclick="downloadCustomerReport()" style="background:#DAA520; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">📊 Excel出力</button>
+      </div>
     </div>
   </div>
   <div class="content">
@@ -544,6 +585,12 @@ function tableToAOA(tableId) {
   });
   return rows;
 }
+function printCustomerReport() {
+  // Ensure all charts are rendered before printing
+  // Chart.js canvases auto-adjust via CSS; just trigger print
+  window.print();
+}
+
 function downloadCustomerReport() {
   if (typeof XLSX === 'undefined') { alert('Excelライブラリ読み込み中です。数秒後にもう一度お試しください。'); return; }
   const name = document.getElementById('cp-name').textContent || '得意先';
