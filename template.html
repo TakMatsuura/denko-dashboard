@@ -187,40 +187,54 @@ tr:hover td { background: #f3f3f3; }
 
 /* ===== Print CSS ===== */
 @media print {
-  @page { size: A4 landscape; margin: 10mm; }
-  body { background: #fff !important; font-size: 10px; }
+  @page { size: A4 landscape; margin: 8mm; }
+  html, body { background: #fff !important; font-size: 9px; margin: 0 !important; padding: 0 !important; }
   /* Hide navbar, login, and non-active sections */
   .navbar, #login-screen { display: none !important; }
   .section:not(.active) { display: none !important; }
-  /* Hide buttons and interactive elements */
+  /* Hide buttons */
   button, .menu-toggle { display: none !important; }
+  /* Print: show everything on customer page contiguously */
+  #customer-page .section, #customer-page { page-break-before: auto !important; }
   /* Page header: compact */
-  .page-header { padding: 6px 0; border-bottom: 2px solid #DAA520; }
-  .page-header h2 { font-size: 16px; }
-  .content { padding: 8px 0; }
-  /* Cards: no shadow, thin border for print */
-  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; page-break-inside: avoid; }
-  .card-header { background: #faf5e0 !important; padding: 6px 10px !important; }
-  .card-header h3 { font-size: 11px !important; }
-  .card-body { padding: 6px !important; }
-  /* KPIs smaller */
-  .kpi-card { padding: 6px 10px !important; box-shadow: none !important; border: 1px solid #ccc !important; }
-  .kpi-card .kpi-value { font-size: 13px !important; }
-  .kpi-card .kpi-label { font-size: 8px !important; }
-  /* Tables compact */
-  td, th { padding: 3px 6px !important; font-size: 9px !important; }
-  /* Charts: force height so they render */
-  canvas { max-height: 250px !important; }
-  .gauge-wrap canvas { max-height: 120px !important; }
-  /* Page break after major sections */
-  .grid-2, .grid-3 { page-break-inside: avoid; }
+  .page-header { padding: 4px 0 !important; border-bottom: 2px solid #DAA520; margin-bottom: 4px; }
+  .page-header h2 { font-size: 14px !important; }
+  .page-header .subtitle { font-size: 9px !important; }
+  .content { padding: 4px 0 !important; }
+  /* Cards: no shadow, thin border */
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; margin-bottom: 4px !important; }
+  .card-header { background: #faf5e0 !important; padding: 3px 8px !important; }
+  .card-header h3 { font-size: 10px !important; }
+  .card-body { padding: 4px !important; }
+  /* KPI rows compact */
+  .kpi-row { gap: 4px !important; margin-bottom: 4px !important; }
+  .kpi-card { padding: 4px 6px !important; box-shadow: none !important; border: 1px solid #ccc !important; }
+  .kpi-card .kpi-value { font-size: 11px !important; }
+  .kpi-card .kpi-label { font-size: 7px !important; margin-bottom: 2px !important; }
+  .kpi-card .kpi-sub { font-size: 7px !important; }
+  /* Tables very compact */
+  td, th { padding: 2px 5px !important; font-size: 8px !important; }
+  /* Charts: smaller to fit landscape */
+  .card-body { height: auto !important; }
+  canvas { max-height: 160px !important; width: 100% !important; }
+  .gauge-wrap canvas { max-height: 80px !important; margin-bottom: 10px !important; }
+  .gauge-center .gauge-val { font-size: 11px !important; }
+  .gauge-center .gauge-pct { font-size: 8px !important; }
+  /* Grid gap */
+  .grid-2, .grid-3 { gap: 4px !important; margin-bottom: 4px !important; }
+  /* Customer page 5-cols summary: shrink */
+  #customer-page .content > div:first-child { gap: 4px !important; margin-bottom: 4px !important; }
+  #customer-page .content > div:first-child > div .card-body { padding: 4px 6px !important; }
+  #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 11px !important; }
+  /* Pie + legend layout in print: side-by-side, compact */
+  .card-body[style*="display:flex"] { display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important; height: auto !important; }
+  .card-body[style*="display:flex"] > div:first-child { flex: 0 0 140px !important; max-height: 140px !important; }
+  .legend-grid { font-size: 8px !important; gap: 1px 6px !important; }
+  .legend-dot { width: 7px !important; height: 7px !important; }
   /* Keep full width */
   body, #dashboard-main { width: 100% !important; max-width: none !important; }
-  /* Customer page 5-cols summary: shrink */
-  #customer-page .content > div:first-child > div { padding: 4px !important; }
-  #cp-sales, #cp-profit, #cp-margin, #cp-orders-total, #cp-purchase-total { font-size: 13px !important; }
   /* Force colors in print (Chrome) */
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
 }
 </style>
 </head>
