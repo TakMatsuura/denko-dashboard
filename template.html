@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DENKO Sales Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --sf-blue: #DAA520;
@@ -278,7 +279,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
       <div class="card"><div class="card-header"><h3>Cumulative Progress</h3></div><div class="card-body" style="height:280px"><canvas id="chart-budget-cumulative"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>Monthly Achievement Rate</h3></div><div class="card-body" style="height:280px"><canvas id="chart-budget-rate"></canvas></div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Monthly Detail</h3></div><div class="card-body"><table id="table-budget"><thead><tr><th>Month</th><th class="text-right">Budget</th><th class="text-right">Actual</th><th class="text-right">Diff</th><th class="text-right">Rate</th><th>Progress</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Monthly Detail</h3><button onclick="downloadTableCSV('table-budget','月次予実')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div><div class="card-body"><table id="table-budget"><thead><tr><th>Month</th><th class="text-right">Budget</th><th class="text-right">Actual</th><th class="text-right">Diff</th><th class="text-right">Rate</th><th>Progress</th></tr></thead><tbody></tbody></table></div></div>
     <div class="kpi-row" id="kpi-offices"></div>
     <div class="grid-2">
       <div class="card"><div class="card-header"><h3>Office Monthly Trend (拠点別推移)</h3></div><div class="card-body" style="height:220px"><canvas id="chart-office-trend"></canvas></div></div>
@@ -294,7 +295,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="grid-2">
       <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:420px"><canvas id="chart-customer-rank"></canvas></div></div>
     </div>
-<div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Customer Detail</h3><div class="badge" id="customer-count"></div></div><div class="card-body"><table id="table-customers"><thead><tr><th>Code</th><th>Customer</th><th>Dept</th><th class="text-right">Net Sales</th><th class="text-right">Gross Profit</th><th class="text-right">Margin</th></tr></thead><tbody></tbody></table></div></div>
+<div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Customer Detail</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="customer-count"></div><button onclick="downloadTableCSV('table-customers','得意先一覧')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div><div class="card-body"><table id="table-customers"><thead><tr><th>Code</th><th>Customer</th><th>Dept</th><th class="text-right">Net Sales</th><th class="text-right">Gross Profit</th><th class="text-right">Margin</th></tr></thead><tbody></tbody></table></div></div>
   </div>
 </div>
 
@@ -303,10 +304,11 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   <div class="page-header">
     <div style="display:flex; align-items:center; gap:12px;">
       <button onclick="closeCustomerPage()" style="background:none; border:2px solid #DAA520; color:#DAA520; padding:6px 14px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">← 戻る</button>
-      <div>
+      <div style="flex:1;">
         <h2 id="cp-name" style="margin:0;"></h2>
         <div class="subtitle" id="cp-subtitle"></div>
       </div>
+      <button onclick="downloadCustomerReport()" style="background:#DAA520; border:none; color:#fff; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.9rem;">📊 レポート出力 (Excel)</button>
     </div>
   </div>
   <div class="content">
@@ -326,13 +328,13 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <!-- Sales & Orders Detail Tables (side by side, Top 10) -->
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><h3>売上明細 Top 10</h3><div class="badge" id="cp-sales-count"></div></div>
+        <div class="card-header"><h3>売上明細 Top 10</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="cp-sales-count"></div><button onclick="downloadTableCSV('cp-table-sales', document.getElementById('cp-name').textContent + '_売上明細')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div>
         <div class="card-body">
           <table id="cp-table-sales"><thead><tr><th>商品コード</th><th>商品名</th><th class="text-right">売上額</th><th class="text-right">原価</th><th class="text-right">粗利率</th></tr></thead><tbody></tbody></table>
         </div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>受注明細 Top 10</h3><div class="badge" id="cp-orders-count"></div></div>
+        <div class="card-header"><h3>受注明細 Top 10</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="cp-orders-count"></div><button onclick="downloadTableCSV('cp-table-orders', document.getElementById('cp-name').textContent + '_受注明細')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div>
         <div class="card-body">
           <table id="cp-table-orders"><thead><tr><th>受注日</th><th>受注番号</th><th class="text-right">受注金額</th><th class="text-right">原価</th><th>引当/計上</th></tr></thead><tbody></tbody></table>
         </div>
@@ -340,7 +342,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     </div>
     <!-- Supplier Detail Table -->
     <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><h3>仕入先明細</h3></div>
+      <div class="card-header"><h3>仕入先明細</h3><button onclick="downloadTableCSV('cp-table-supplier', document.getElementById('cp-name').textContent + '_仕入先明細')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div>
       <div class="card-body">
         <table id="cp-table-supplier"><thead><tr><th>仕入先</th><th class="text-right">原価合計</th><th class="text-right">構成比</th></tr></thead><tbody></tbody></table>
       </div>
@@ -348,13 +350,13 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <!-- 受注残明細 (FY25 / FY26) -->
     <div class="grid-2">
       <div class="card">
-        <div class="card-header"><h3>FY25 受注残明細</h3><div class="badge" id="cp-backlog-fy25-count"></div></div>
+        <div class="card-header"><h3>FY25 受注残明細</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="cp-backlog-fy25-count"></div><button onclick="downloadTableCSV('cp-table-backlog-fy25', document.getElementById('cp-name').textContent + '_FY25受注残')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div>
         <div class="card-body">
           <table id="cp-table-backlog-fy25"><thead><tr><th>受注日</th><th>受注番号</th><th>商品名</th><th class="text-right">金額</th><th>指定納期</th></tr></thead><tbody></tbody></table>
         </div>
       </div>
       <div class="card">
-        <div class="card-header"><h3>FY26 受注残明細</h3><div class="badge" id="cp-backlog-fy26-count"></div></div>
+        <div class="card-header"><h3>FY26 受注残明細</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="cp-backlog-fy26-count"></div><button onclick="downloadTableCSV('cp-table-backlog-fy26', document.getElementById('cp-name').textContent + '_FY26受注残')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div>
         <div class="card-body">
           <table id="cp-table-backlog-fy26"><thead><tr><th>受注日</th><th>受注番号</th><th>商品名</th><th class="text-right">金額</th><th>指定納期</th></tr></thead><tbody></tbody></table>
         </div>
@@ -377,7 +379,13 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   <div class="content">
     <div class="kpi-row" id="dd-kpi"></div>
     <div class="card" style="margin-bottom:16px;">
-      <div class="card-header"><h3 id="dd-table-title">Detail</h3><div class="badge" id="dd-count"></div></div>
+      <div class="card-header">
+        <h3 id="dd-table-title">Detail</h3>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="badge" id="dd-count"></div>
+          <button onclick="downloadTableCSV('dd-table', document.getElementById('dd-title').textContent)" style="background:#DAA520; border:none; color:#fff; padding:5px 12px; border-radius:6px; cursor:pointer; font-weight:600; font-size:0.8rem;">⬇ CSV</button>
+        </div>
+      </div>
       <div class="card-body">
         <table id="dd-table"><thead id="dd-thead"></thead><tbody id="dd-tbody"></tbody></table>
       </div>
@@ -398,7 +406,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
       <div class="card"><div class="card-header"><h3>Supplier Ranking</h3></div><div class="card-body"><canvas id="chart-purchase-rank"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>Monthly Order Count</h3></div><div class="card-body"><canvas id="chart-purchase-count"></canvas></div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Supplier Summary</h3></div><div class="card-body"><table id="table-purchase"><thead><tr><th>Code</th><th>Supplier</th><th class="text-right">Annual Amount</th><th class="text-right">Qty</th><th class="text-right">Orders</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Supplier Summary</h3><button onclick="downloadTableCSV('table-purchase','仕入先一覧')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div><div class="card-body"><table id="table-purchase"><thead><tr><th>Code</th><th>Supplier</th><th class="text-right">Annual Amount</th><th class="text-right">Qty</th><th class="text-right">Orders</th></tr></thead><tbody></tbody></table></div></div>
   </div>
 </div>
 
@@ -412,7 +420,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
       <div class="card"><div class="card-header"><h3>FY25 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy25"></canvas></div></div>
       <div class="card"><div class="card-header"><h3>FY26 受注残 by Customer</h3></div><div class="card-body" style="height:250px"><canvas id="chart-order-backlog-fy26"></canvas></div></div>
     </div>
-    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div class="badge" id="order-count"></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>指定納期</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-header"><h3>Recent Orders</h3><div style="display:flex;gap:10px;align-items:center;"><div class="badge" id="order-count"></div><button onclick="downloadTableCSV('table-orders','受注明細')" style="background:#DAA520;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.8rem;">⬇ CSV</button></div></div><div class="card-body"><table id="table-orders"><thead><tr><th>Date</th><th>Order#</th><th>Customer</th><th class="text-right">Amount</th><th>指定納期</th><th>Status</th></tr></thead><tbody></tbody></table></div></div>
   </div>
 </div>
 
@@ -482,6 +490,109 @@ function openDrillDown(title, subtitle, rows, columns, kpiHtml, onRowClick) {
   });
   window.scrollTo(0, 0);
 }
+// === CSV Download (UTF-8 BOM付き、Excel対応) ===
+function downloadTableCSV(tableId, baseName) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const rows = [];
+  // Headers
+  const headerCells = table.querySelectorAll('thead th');
+  rows.push(Array.from(headerCells).map(c => csvEscape(c.textContent.trim())).join(','));
+  // Body rows
+  const bodyRows = table.querySelectorAll('tbody tr');
+  bodyRows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    rows.push(Array.from(cells).map(c => csvEscape(c.textContent.trim())).join(','));
+  });
+  const csv = '\uFEFF' + rows.join('\r\n'); // BOM for Excel
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().substring(0,10).replace(/-/g,'');
+  const safeName = (baseName||'data').replace(/[\\/:*?"<>|]/g, '_').substring(0,50);
+  a.download = `DENKO_${safeName}_${today}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+// === 得意先レポート Excel 出力 ===
+function tableToAOA(tableId) {
+  const table = document.getElementById(tableId);
+  if (!table) return [];
+  const rows = [];
+  const headerCells = table.querySelectorAll('thead th');
+  rows.push(Array.from(headerCells).map(c => c.textContent.trim()));
+  const bodyRows = table.querySelectorAll('tbody tr');
+  bodyRows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    rows.push(Array.from(cells).map(c => {
+      const txt = c.textContent.trim();
+      const num = parseFloat(txt.replace(/[,¥%]/g,''));
+      return !isNaN(num) && /^[-\d,¥]+(\.\d+)?%?$/.test(txt) ? num : txt;
+    }));
+  });
+  return rows;
+}
+function downloadCustomerReport() {
+  if (typeof XLSX === 'undefined') { alert('Excelライブラリ読み込み中です。数秒後にもう一度お試しください。'); return; }
+  const name = document.getElementById('cp-name').textContent || '得意先';
+  const today = new Date().toISOString().substring(0,10);
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Summary
+  const summary = [
+    ['DENKO 得意先レポート'],
+    [],
+    ['得意先名', name],
+    ['出力日', today],
+    ['期間', 'FY25 (2025/05/01〜2026/04/30)'],
+    [],
+    ['KPI', '値'],
+    ['売上高', document.getElementById('cp-sales').textContent],
+    ['粗利益', document.getElementById('cp-profit').textContent],
+    ['粗利率', document.getElementById('cp-margin').textContent],
+    ['受注高', document.getElementById('cp-orders-total').textContent],
+    ['仕入高', document.getElementById('cp-purchase-total').textContent],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(summary);
+  ws1['!cols'] = [{wch:20},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'サマリ');
+
+  // Sheet 2-6: テーブル
+  const tables = [
+    { id: 'cp-table-sales', name: '売上明細Top10' },
+    { id: 'cp-table-orders', name: '受注明細Top10' },
+    { id: 'cp-table-supplier', name: '仕入先明細' },
+    { id: 'cp-table-backlog-fy25', name: 'FY25受注残' },
+    { id: 'cp-table-backlog-fy26', name: 'FY26受注残' },
+  ];
+  for (const t of tables) {
+    const aoa = tableToAOA(t.id);
+    if (aoa.length <= 1) continue;
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // Auto-width based on header length
+    ws['!cols'] = aoa[0].map((_, i) => {
+      const maxLen = Math.max(...aoa.map(row => String(row[i]||'').length));
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+    });
+    XLSX.utils.book_append_sheet(wb, ws, t.name);
+  }
+
+  const safeName = name.replace(/[\\/:*?"<>|]/g, '_').substring(0,40);
+  XLSX.writeFile(wb, `DENKO_得意先レポート_${safeName}_${today.replace(/-/g,'')}.xlsx`);
+}
+
 function closeDrillDown() {
   if (_ddHistory.length > 0) {
     // Go back one level
