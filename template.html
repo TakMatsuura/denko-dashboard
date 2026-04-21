@@ -273,12 +273,18 @@ tr:hover td { background: #f3f3f3; }
   </div>
 </div>
 <script>
-const DASHBOARD_ID = 'denko';
-const DASHBOARD_PW = 'Dnk-E!2025#power';
-function doLogin() {
+const DASHBOARD_ID_HASH = '334a2b8233ba53b73d8d38fcefa7e2ac12a89b8b9cd61cdf353e84589ae5c357';
+const DASHBOARD_PW_HASH = '7a144b4ca6a1a112e97c7dbf622c16c21e50384693462775902ae723ce147462';
+async function sha256Hex(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function doLogin() {
   const id = document.getElementById('login-id').value;
   const pw = document.getElementById('login-pw').value;
-  if (id === DASHBOARD_ID && pw === DASHBOARD_PW) {
+  const [idH, pwH] = await Promise.all([sha256Hex(id), sha256Hex(pw)]);
+  if (idH === DASHBOARD_ID_HASH && pwH === DASHBOARD_PW_HASH) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('dashboard-main').style.display = 'block';
     sessionStorage.setItem('denko-auth', '1');
