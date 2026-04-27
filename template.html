@@ -363,6 +363,22 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 <div id="customers" class="section">
   <div class="page-header"><h2>Customer Analysis</h2><div class="subtitle">得意先別の売上・利益分析</div></div>
   <div class="content">
+    <!-- Filter / Jump Bar -->
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-body" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <label style="font-size:11px; font-weight:600; color:#706e6b;">🔍 検索:</label>
+          <input id="customer-search" type="text" placeholder="得意先名 or コードで絞込" oninput="applyCustomerFilter()" style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:12px; width:240px;">
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <label style="font-size:11px; font-weight:600; color:#706e6b;">⚡ 詳細へ:</label>
+          <select id="customer-jump" onchange="jumpToCustomer(this.value)" style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:12px; min-width:240px;">
+            <option value="">— 得意先を選択 —</option>
+          </select>
+        </div>
+        <button onclick="clearCustomerFilter()" style="background:none; border:1px solid #ccc; color:#706e6b; padding:5px 12px; border-radius:6px; cursor:pointer; font-size:11px;">クリア</button>
+      </div>
+    </div>
     <div class="grid-2">
       <div class="card full"><div class="card-header"><h3>Top 15 Customers by Revenue</h3></div><div class="card-body" style="height:420px"><canvas id="chart-customer-rank"></canvas></div></div>
     </div>
@@ -1187,12 +1203,26 @@ function buildBudget(budget, deptSales) {
   document.getElementById('legend-office').innerHTML = offEntries.map((e,i) => `<div class="legend-item"><span class="legend-dot" style="background:${offColors[i]}"></span>${e[0]}: ${fmtOku(e[1])}</div>`).join('');
 }
 
+let _customerRankChart = null;
 function buildCustomers(customerSales) {
   const filtered = customerSales.filter(r => DENKI_DEPTS.includes(r['部門コード']));
   const sorted = filtered.sort((a, b) => (parseFloat(b['純売上額'])||0) - (parseFloat(a['純売上額'])||0));
-  document.getElementById('customer-count').textContent = sorted.length + ' customers';
-  const top15 = sorted.slice(0, 15);
-  new Chart(document.getElementById('chart-customer-rank'), {
+  // 全得意先を保持（フィルターで再描画するため）
+  window._allCustomers = sorted;
+  // Jumpドロップダウン構築（全得意先）
+  const jumpSel = document.getElementById('customer-jump');
+  if (jumpSel) {
+    jumpSel.innerHTML = '<option value="">— 得意先を選択 —</option>' +
+      sorted.map(r => `<option value="${r['得意先コード']}">${r['得意先名']} (${fmtOku(toNum(r['純売上額']))})</option>`).join('');
+  }
+  renderCustomers(sorted);
+}
+
+function renderCustomers(list) {
+  document.getElementById('customer-count').textContent = list.length + ' customers';
+  const top15 = list.slice(0, 15);
+  if (_customerRankChart) _customerRankChart.destroy();
+  _customerRankChart = new Chart(document.getElementById('chart-customer-rank'), {
     type: 'bar',
     data: { labels: top15.map(r => r['得意先名']), datasets: [{ label: 'Net Sales', data: top15.map(r => toNum(r['純売上額'])), backgroundColor: '#DAA520cc' }] },
     options: {
@@ -1202,7 +1232,8 @@ function buildCustomers(customerSales) {
   });
 
   const tbody = document.querySelector('#table-customers tbody');
-  sorted.forEach(r => {
+  tbody.innerHTML = '';
+  list.forEach(r => {
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.onmouseover = () => tr.style.background = '#f5f0e0';
@@ -1215,6 +1246,33 @@ function buildCustomers(customerSales) {
     tr.onclick = () => openCustomerPage(r['得意先名'], r['得意先コード']);
     tbody.appendChild(tr);
   });
+}
+
+function applyCustomerFilter() {
+  const q = (document.getElementById('customer-search').value || '').trim().toLowerCase();
+  const all = window._allCustomers || [];
+  if (!q) { renderCustomers(all); return; }
+  const filtered = all.filter(r => {
+    const name = (r['得意先名']||'').toLowerCase();
+    const code = (r['得意先コード']||'').toLowerCase();
+    return name.includes(q) || code.includes(q);
+  });
+  renderCustomers(filtered);
+}
+
+function jumpToCustomer(code) {
+  if (!code) return;
+  const all = window._allCustomers || [];
+  const r = all.find(x => x['得意先コード'] === code);
+  if (r) openCustomerPage(r['得意先名'], r['得意先コード']);
+  // Reset dropdown
+  document.getElementById('customer-jump').value = '';
+}
+
+function clearCustomerFilter() {
+  document.getElementById('customer-search').value = '';
+  document.getElementById('customer-jump').value = '';
+  renderCustomers(window._allCustomers || []);
 }
 
 let _cpChart = null;
