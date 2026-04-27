@@ -2,7 +2,7 @@ name: Update DENKO Dashboard
 
 on:
   schedule:
-    - cron: '0 21 * * *'
+    - cron: '0 23 * * *'  # 8:00 JST daily (23:00 UTC)
   workflow_dispatch:
 
 permissions:

@@ -12,15 +12,19 @@ console.log('=== Convert encoding ===');
 const csvFiles = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.csv'));
 for (const file of csvFiles) {
   const filePath = path.join(DATA_DIR, file);
+  const buf = fs.readFileSync(filePath);
+  let content;
+  // 1. Try strict UTF-8 first (file is already UTF-8 if this succeeds)
   try {
-    execSync(`iconv -f SHIFT_JIS -t UTF-8 "${filePath}" > "${filePath}.tmp" && mv "${filePath}.tmp" "${filePath}"`);
-    console.log(`  Converted SJIS->UTF8: ${file}`);
+    content = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    console.log(`  UTF-8 (as-is): ${file}`);
   } catch (e) {
-    console.log(`  Kept as-is: ${file}`);
+    // 2. Not valid UTF-8 -> decode as Shift-JIS (lossy fallback, never throws)
+    content = new TextDecoder('shift_jis', { fatal: false }).decode(buf);
+    console.log(`  SJIS->UTF8: ${file}`);
   }
   // Remove BOM
-  let content = fs.readFileSync(filePath, 'utf8');
-  content = content.replace(/^\uFEFF/, '');
+  content = content.replace(/^﻿/, '');
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
