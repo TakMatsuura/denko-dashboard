@@ -55,8 +55,43 @@ const MASTER_LIST = [
     try {
       console.log(`  ${m.label} (${m.url}) ...`);
       // /export ページに移動してフォームのhidden field (CSRFトークン等) を取得
-      await page.goto(`${FLAM_URL}/${m.url}/export`, { waitUntil: 'networkidle', timeout: 60000 });
-      await page.waitForTimeout(1500);
+      // destinations 等は /export にアクセスすると直接DLが始まるため try/catch で逃がす
+      let directDownload = false;
+      try {
+        await page.goto(`${FLAM_URL}/${m.url}/export`, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.waitForTimeout(1500);
+      } catch (e) {
+        if (/Download is starting/i.test(e.message)) {
+          console.log(`    /export triggered direct download → GET fallback`);
+          directDownload = true;
+        } else {
+          throw e;
+        }
+      }
+
+      // 直接GET フォールバック (destinations 系)
+      if (directDownload) {
+        const apiRes = await context.request.get(`${FLAM_URL}/${m.url}/export`, { timeout: 120000 });
+        const status = apiRes.status();
+        const rawBuf = await apiRes.body();
+        console.log(`    GET status=${status}, raw=${rawBuf.length.toLocaleString()}B`);
+        if (status !== 200 || rawBuf.length < 50) {
+          summary.files.push({ file: m.file, status: 'failed', http_status: status });
+          continue;
+        }
+        let text;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(rawBuf); }
+        catch (e) { text = new TextDecoder('shift_jis', { fatal: false }).decode(rawBuf); }
+        text = text.replace(/^﻿/, '');
+        const utf8Buf = Buffer.from(text, 'utf8');
+        const gzipped = zlib.gzipSync(utf8Buf, { level: 9 });
+        const outPath = path.join(SNAPSHOT_DIR, `${m.file}.gz`);
+        fs.writeFileSync(outPath, gzipped);
+        const rowCount = text.split('\n').filter(l => l.trim()).length - 1;
+        console.log(`    ✅ ${m.file}.gz (raw=${utf8Buf.length.toLocaleString()}B, gz=${gzipped.length.toLocaleString()}B, ${rowCount.toLocaleString()} rows)`);
+        summary.files.push({ file: `${m.file}.gz`, status: 'ok', raw_bytes: utf8Buf.length, gz_bytes: gzipped.length, rows: rowCount });
+        continue;
+      }
 
       // フォームのフィールド情報をブラウザから抽出 (軽量)
       const formInfo = await page.evaluate(() => {
@@ -93,8 +128,9 @@ const MASTER_LIST = [
       formInfo.fields['format'] = 'csv';
 
       // Playwright の APIRequestContext で POST (Node側fetch・Bufferを直接取得)
+      // products は 108K行 (raw 50MB+) のため 120秒に拡張
       const postUrl = `${FLAM_URL}/${m.url}/export/exec`;
-      const apiRes = await context.request.post(postUrl, { form: formInfo.fields });
+      const apiRes = await context.request.post(postUrl, { form: formInfo.fields, timeout: 180000 });
       const status = apiRes.status();
       const contentType = apiRes.headers()['content-type'] || '';
 
