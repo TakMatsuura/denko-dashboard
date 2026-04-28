@@ -2,29 +2,35 @@
   "date": "2026-04-28",
   "files": [
     {
-      "file": "m_customers.csv",
-      "status": "failed",
-      "bytes": 0
+      "file": "m_customers.csv.gz",
+      "status": "ok",
+      "raw_bytes": 189984,
+      "gz_bytes": 12972,
+      "rows": 212
     },
     {
       "file": "m_products.csv",
-      "status": "failed",
-      "bytes": 0
+      "status": "error",
+      "error": "apiRequestContext.post: Timeout 30000ms exceeded.\nCall log:\n  - → POST https://dnk.flam.bz/products/export/exec\n    - user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/147.0.7727.15 Safari/537.36\n    - accept: */*\n    - accept-encoding: gzip,deflate,br\n    - content-type: application/x-www-form-urlencoded\n    - content-length: 77\n    - cookie: _gid=GA1.2.2125909763.1777362045; _gat_gtag_UA_24787503_1=1; CAKEPHP=clh6qmn1q9neh4vvjeblgesnce; _ga_1RLT6H2MGS=GS2.1.s1777362044$o1$g1$t1777362051$j53$l0$h0; _ga=GA1.2.1400733673.1777362045\n"
     },
     {
-      "file": "m_suppliers.csv",
-      "status": "failed",
-      "bytes": 0
+      "file": "m_suppliers.csv.gz",
+      "status": "ok",
+      "raw_bytes": 107077,
+      "gz_bytes": 9262,
+      "rows": 136
     },
     {
       "file": "m_destinations.csv",
-      "status": "failed",
-      "bytes": 0
+      "status": "error",
+      "error": "page.goto: Download is starting\nCall log:\n  - navigating to \"https://dnk.flam.bz/destinations/export\", waiting until \"networkidle\"\n"
     },
     {
-      "file": "m_customerproductprices.csv",
-      "status": "failed",
-      "bytes": 0
+      "file": "m_customerproductprices.csv.gz",
+      "status": "ok",
+      "raw_bytes": 20961226,
+      "gz_bytes": 1226361,
+      "rows": 160179
     }
   ]
 }
