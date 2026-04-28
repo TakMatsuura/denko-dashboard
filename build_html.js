@@ -81,7 +81,22 @@ if (startIdx === -1 || endIdx === -1) {
 const before = template.substring(0, startIdx);
 const after = template.substring(endIdx + endPlaceholder.length);
 
-const output = before + csvDataBlock + after;
+let output = before + csvDataBlock + after;
+
+// ★Phase 0.3-5: MASTER_SUMMARY 埋込
+const masterSummaryPath = path.join(SCRIPT_DIR, 'data', 'master_summary.json');
+let masterSummaryBlock = '<script>\nconst MASTER_SUMMARY = null;\n</script>';
+if (fs.existsSync(masterSummaryPath)) {
+  const summaryStr = fs.readFileSync(masterSummaryPath, 'utf8');
+  masterSummaryBlock = `<script>\nconst MASTER_SUMMARY = ${summaryStr};\n</script>`;
+  console.log('  Embedded MASTER_SUMMARY');
+}
+const msStartIdx = output.indexOf('<!-- MASTER_SUMMARY_PLACEHOLDER -->');
+const msEndIdx = output.indexOf('<!-- END_MASTER_SUMMARY_PLACEHOLDER -->');
+if (msStartIdx !== -1 && msEndIdx !== -1) {
+  const msEndStr = '<!-- END_MASTER_SUMMARY_PLACEHOLDER -->';
+  output = output.substring(0, msStartIdx) + masterSummaryBlock + output.substring(msEndIdx + msEndStr.length);
+}
 
 fs.mkdirSync(path.join(SCRIPT_DIR, 'public'), { recursive: true });
 fs.writeFileSync(OUTPUT, output, 'utf8');

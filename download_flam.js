@@ -289,7 +289,69 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
     console.log(`  Stock download failed: ${e.message}`);
   }
 
+  // ============================================================
+  // ★Phase 0.3-5 (2026-04-28): 5マスタDL追加 (履歴ダッシュボード用)
+  // ============================================================
+  console.log('=== Master Data Download (Phase 0.3-5) ===');
+  const MASTER_LIST = [
+    { url: 'customers',              file: 'm_customers.csv',              label: '得意先マスタ' },
+    { url: 'products',               file: 'm_products.csv',               label: '商品マスタ' },
+    { url: 'suppliers',              file: 'm_suppliers.csv',              label: '仕入先マスタ' },
+    { url: 'destinations',           file: 'm_destinations.csv',           label: '納入先マスタ' },
+    { url: 'customerproductprices',  file: 'm_customerproductprices.csv',  label: '得意先別商品情報マスタ' },
+  ];
 
+  for (const m of MASTER_LIST) {
+    try {
+      console.log(`  ${m.label} (${m.url}) ...`);
+      // Step 1: ページ訪問でセッション取得
+      await page.goto(`${FLAM_URL}/${m.url}`, { waitUntil: 'networkidle', timeout: 60000 });
+      await page.waitForTimeout(1500);
+
+      // Step 2: フォームPOSTで CSV取得
+      const response = await page.evaluate(async (params) => {
+        const form = document.querySelector('form');
+        if (!form) return { status: -1, error: 'No form found' };
+        const formData = new FormData(form);
+        formData.set('file-format', 'csv');
+        formData.set('format', 'csv');
+        const res = await fetch(`${params.baseUrl}/${params.urlPath}/export/exec`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        });
+        const buffer = await res.arrayBuffer();
+        const bytes = Array.from(new Uint8Array(buffer));
+        return {
+          status: res.status,
+          contentType: res.headers.get('content-type'),
+          length: bytes.length,
+          bytes: bytes,
+        };
+      }, { baseUrl: FLAM_URL, urlPath: m.url });
+
+      if (response.status !== 200 || response.length < 50) {
+        console.log(`    ⚠️ Failed (status=${response.status}, size=${response.length})`);
+        continue;
+      }
+
+      // Step 3: 文字コード変換 + 保存
+      const buf = Buffer.from(response.bytes);
+      let text;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+      } catch (e) {
+        text = new TextDecoder('shift_jis', { fatal: false }).decode(buf);
+      }
+      text = text.replace(/^﻿/, '');
+      const filePath = path.join(DATA_DIR, m.file);
+      fs.writeFileSync(filePath, text, 'utf8');
+      const lineCount = text.split('\n').filter(l => l.trim()).length - 1;
+      console.log(`    ✅ ${m.file} (${response.length.toLocaleString()} bytes, ${lineCount.toLocaleString()} rows)`);
+    } catch (e) {
+      console.log(`    ⚠️ ${m.label} failed: ${e.message}`);
+    }
+  }
 
   await browser.close();
   console.log('=== Done ===');

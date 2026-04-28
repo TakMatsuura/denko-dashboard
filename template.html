@@ -315,6 +315,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('customers',this)">Customers</div>
     <div class="nav-tab" onclick="showTab('orders',this)">Orders</div>
     <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
+    <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
   <div class="nav-right">FY2025 (2025/05 - 2026/04)</div>
 </div>
@@ -514,8 +515,50 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
 </div>
 
+<!-- MASTER (Phase 0.3-5: マスタ履歴ダッシュボード) -->
+<div id="master" class="section">
+  <div class="page-header"><h2>Master Data History</h2><div class="subtitle">FLAMマスタの日次変更履歴 (件数推移・新規追加・廃番化・単価変更)</div></div>
+  <div class="content">
+    <!-- 5マスタの当日件数 KPI -->
+    <div class="kpi-row" id="kpi-master"></div>
+
+    <!-- 件数推移グラフ -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>マスタ件数推移 (直近30日)</h3></div>
+      <div class="card-body" style="height:300px"><canvas id="chart-master-trend"></canvas></div>
+    </div>
+
+    <div class="grid-2">
+      <!-- 新規追加 -->
+      <div class="card">
+        <div class="card-header"><h3>新規追加 (前日比)</h3></div>
+        <div class="card-body"><div id="master-added"></div></div>
+      </div>
+      <!-- 廃番化/削除 -->
+      <div class="card">
+        <div class="card-header"><h3>廃番化/削除 (前日比)</h3></div>
+        <div class="card-body"><div id="master-removed"></div></div>
+      </div>
+    </div>
+
+    <!-- 単価変更 -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><h3>得意先別単価変更 (前日比)</h3><div class="badge" id="master-prices-count"></div></div>
+      <div class="card-body"><table id="table-master-prices"><thead><tr><th>得意先コード</th><th>商品コード</th><th class="text-right">旧単価</th><th class="text-right">新単価</th><th class="text-right">差分</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- 生成日時 -->
+    <div style="font-size:10px;color:#888;text-align:right;padding:8px 0">
+      <span id="master-generated-at"></span>
+    </div>
+  </div>
+</div>
+
 // CSV_DATA_PLACEHOLDER
 // END_CSV_DATA_PLACEHOLDER
+
+<!-- MASTER_SUMMARY_PLACEHOLDER -->
+<!-- END_MASTER_SUMMARY_PLACEHOLDER -->
 
 <script>
 const COLORS = ['#0176d3','#1b96ff','#3ba755','#fe9339','#9050e9','#04a9c9','#e8006f','#444','#c0392b','#16a085','#7f8c8d','#e67e22'];
@@ -528,6 +571,94 @@ function showTab(id, el) {
   document.getElementById(id).classList.add('active');
   el.classList.add('active');
   document.querySelector('.nav-tabs').classList.remove('open');
+  // ★Phase 0.3-5: Master タブ初期描画
+  if (id === 'master') {
+    try { renderMaster(); } catch (e) { console.error('renderMaster failed:', e); }
+  }
+}
+
+// ★Phase 0.3-5: マスタ履歴ダッシュボード描画
+let _masterChartInstance = null;
+function renderMaster() {
+  const container = document.getElementById('kpi-master');
+  if (typeof MASTER_SUMMARY === 'undefined' || MASTER_SUMMARY === null) {
+    container.innerHTML = '<div style="padding:20px;color:#888">マスタ履歴データなし (蓄積待ち / 翌朝以降)</div>';
+    return;
+  }
+  const ms = MASTER_SUMMARY;
+  const order = ['products', 'customers', 'suppliers', 'destinations', 'customerproductprices'];
+
+  // KPI カード
+  container.innerHTML = '';
+  for (const key of order) {
+    const count = (ms.current && ms.current[key]) || 0;
+    const label = (ms.labels && ms.labels[key]) || key;
+    const change = (ms.diff && ms.diff.count_change && ms.diff.count_change[key]) || 0;
+    const color = change > 0 ? '#2e844a' : change < 0 ? '#ea001e' : '#888';
+    const arrow = change > 0 ? '▲' : change < 0 ? '▼' : '─';
+    container.innerHTML += `
+      <div class="kpi-card">
+        <div class="kpi-label">${label}</div>
+        <div class="kpi-value">${count.toLocaleString()}</div>
+        <div style="font-size:11px;color:${color};margin-top:4px;">${arrow} ${change >= 0 ? '+' : ''}${change}</div>
+      </div>`;
+  }
+
+  // 件数推移グラフ
+  if (_masterChartInstance) _masterChartInstance.destroy();
+  const ctx = document.getElementById('chart-master-trend');
+  if (ctx && ms.trend && ms.trend.length > 0) {
+    const labels = ms.trend.map(t => t.date.slice(5));
+    const datasets = order.map((key, i) => ({
+      label: (ms.labels && ms.labels[key]) || key,
+      data: ms.trend.map(t => (t.counts && t.counts[key]) || null),
+      borderColor: COLORS[i],
+      backgroundColor: COLORS[i] + '22',
+      tension: 0.2,
+      yAxisID: key === 'products' || key === 'customerproductprices' ? 'y' : 'y1',
+    }));
+    _masterChartInstance = new Chart(ctx.getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { type: 'linear', position: 'left', title: { display: true, text: '商品/単価 件数' } },
+          y1: { type: 'linear', position: 'right', title: { display: true, text: '得意先/仕入先/納入先 件数' }, grid: { drawOnChartArea: false } },
+        },
+        plugins: { legend: { position: 'top', labels: { font: { size: 10 } } } },
+      },
+    });
+  }
+
+  // 新規追加 / 廃番化 リスト
+  const renderList = (elemId, data) => {
+    const el = document.getElementById(elemId);
+    if (!data) { el.innerHTML = '<div style="color:#888">なし</div>'; return; }
+    let html = '';
+    for (const key of ['customers', 'suppliers', 'destinations']) {
+      const list = data[key] || [];
+      if (list.length === 0) continue;
+      html += `<div style="margin-bottom:8px"><strong>${(ms.labels && ms.labels[key]) || key}</strong> (${list.length}件)<div style="font-size:11px;color:#666;margin-top:2px">${list.slice(0, 10).join(', ')}${list.length > 10 ? ` ... 他${list.length-10}件` : ''}</div></div>`;
+    }
+    el.innerHTML = html || '<div style="color:#888">なし</div>';
+  };
+  renderList('master-added', ms.diff && ms.diff.added);
+  renderList('master-removed', ms.diff && ms.diff.removed);
+
+  // 単価変更
+  const tableBody = document.querySelector('#table-master-prices tbody');
+  const priceChanges = (ms.diff && ms.diff.price_changes) || [];
+  document.getElementById('master-prices-count').textContent = `${(ms.diff && ms.diff.price_changes_total) || 0}件`;
+  tableBody.innerHTML = '';
+  for (const pc of priceChanges) {
+    const diff = pc.new - pc.old;
+    const dColor = diff > 0 ? '#ea001e' : '#2e844a';
+    tableBody.innerHTML += `<tr><td>${pc.customer}</td><td>${pc.product}</td><td class="text-right">¥${pc.old.toLocaleString()}</td><td class="text-right">¥${pc.new.toLocaleString()}</td><td class="text-right" style="color:${dColor}">${diff>=0?'+':''}¥${diff.toLocaleString()}</td></tr>`;
+  }
+
+  // 生成日時
+  document.getElementById('master-generated-at').textContent = `生成: ${ms.generated_at || '-'} (${ms.today})`;
 }
 
 // === Generic Drill-Down (supports multi-level) ===
