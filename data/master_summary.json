@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-04-28T23:57:30.677Z",
+  "today": "2026-04-29",
+  "labels": {
+    "customers": "得意先マスタ",
+    "products": "商品マスタ",
+    "suppliers": "仕入先マスタ",
+    "destinations": "納入先マスタ",
+    "customerproductprices": "得意先別商品情報マスタ"
+  },
+  "current": {
+    "customers": null,
+    "products": null,
+    "suppliers": null,
+    "destinations": null,
+    "customerproductprices": null
+  },
+  "trend": [
+    {
+      "date": "2026-04-29",
+      "counts": {
+        "customers": null,
+        "products": null,
+        "suppliers": null,
+        "destinations": null,
+        "customerproductprices": null
+      }
+    }
+  ],
+  "diff": {
+    "added": {},
+    "removed": {},
+    "count_change": {}
+  }
+}
