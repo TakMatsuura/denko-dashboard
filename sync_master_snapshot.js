@@ -51,12 +51,19 @@ const MASTER_LIST = [
   for (const m of MASTER_LIST) {
     try {
       console.log(`  ${m.label} (${m.url}) ...`);
-      await page.goto(`${FLAM_URL}/${m.url}`, { waitUntil: 'networkidle', timeout: 60000 });
+      // /export ページがフォーム付きの設定画面 (search ページにはフォームが無いことがある)
+      await page.goto(`${FLAM_URL}/${m.url}/export`, { waitUntil: 'networkidle', timeout: 60000 });
       await page.waitForTimeout(1500);
 
       const response = await page.evaluate(async (params) => {
         const form = document.querySelector('form');
-        if (!form) return { status: -1, error: 'No form found' };
+        if (!form) {
+          // フォーム無し → 直接 export URL を GET で叩く (一部マスタはこちら)
+          const res = await fetch(`${params.baseUrl}/${params.urlPath}/export`, { credentials: 'include' });
+          const buffer = await res.arrayBuffer();
+          const bytes = Array.from(new Uint8Array(buffer));
+          return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, mode: 'GET' };
+        }
         const formData = new FormData(form);
         formData.set('file-format', 'csv');
         formData.set('format', 'csv');
@@ -67,8 +74,9 @@ const MASTER_LIST = [
         });
         const buffer = await res.arrayBuffer();
         const bytes = Array.from(new Uint8Array(buffer));
-        return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes };
+        return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, mode: 'POST' };
       }, { baseUrl: FLAM_URL, urlPath: m.url });
+      console.log(`    mode=${response.mode}, status=${response.status}, type=${response.contentType}, size=${response.length}`);
 
       if (response.status !== 200 || response.length < 50) {
         console.log(`    ⚠️ Failed (status=${response.status}, size=${response.length})`);
