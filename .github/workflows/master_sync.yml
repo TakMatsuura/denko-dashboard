@@ -1,0 +1,42 @@
+name: Weekly Master Snapshot
+
+# Phase 0.3-6: 個人PC依存を排除した週次マスタスナップショット
+# - 月曜 8:00 JST (= 日曜 23:00 UTC) に自動実行
+# - 5マスタをFLAMからDLして data/master_snapshots/YYYY-MM-DD/*.csv.gz にコミット
+on:
+  schedule:
+    - cron: '0 23 * * 0'  # Sunday 23:00 UTC = Monday 8:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Download masters from FLAM
+        env:
+          FLAM_ID: ${{ secrets.FLAM_ID }}
+          FLAM_PW: ${{ secrets.FLAM_PW }}
+        run: node sync_master_snapshot.js
+
+      - name: Commit snapshot to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/master_snapshots/ || true
+          git diff --staged --quiet || git commit -m "chore: weekly master snapshot $(TZ=Asia/Tokyo date +%Y-%m-%d)"
+          git push origin main || echo "no changes to push"
