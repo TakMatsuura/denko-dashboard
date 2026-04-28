@@ -3,6 +3,9 @@
  * - FLAMから5マスタをDL
  * - data/master_snapshots/YYYY-MM-DD/ にgzip圧縮で保存
  * - 個人PC依存ゼロ (クラウド実行)
+ *
+ * メモリ効率: page.evaluate経由ではなく context.request.post() で直接Buffer取得
+ * (108K行productsを page.evaluate でやるとV8 4GBヒープOOM)
  */
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -51,49 +54,75 @@ const MASTER_LIST = [
   for (const m of MASTER_LIST) {
     try {
       console.log(`  ${m.label} (${m.url}) ...`);
-      // /export ページがフォーム付きの設定画面 (search ページにはフォームが無いことがある)
+      // /export ページに移動してフォームのhidden field (CSRFトークン等) を取得
       await page.goto(`${FLAM_URL}/${m.url}/export`, { waitUntil: 'networkidle', timeout: 60000 });
       await page.waitForTimeout(1500);
 
-      const response = await page.evaluate(async (params) => {
+      // フォームのフィールド情報をブラウザから抽出 (軽量)
+      const formInfo = await page.evaluate(() => {
         const form = document.querySelector('form');
-        if (!form) {
-          // フォーム無し → 直接 export URL を GET で叩く (一部マスタはこちら)
-          const res = await fetch(`${params.baseUrl}/${params.urlPath}/export`, { credentials: 'include' });
-          const buffer = await res.arrayBuffer();
-          const bytes = Array.from(new Uint8Array(buffer));
-          return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, mode: 'GET' };
-        }
-        const formData = new FormData(form);
-        formData.set('file-format', 'csv');
-        formData.set('format', 'csv');
-        const res = await fetch(`${params.baseUrl}/${params.urlPath}/export/exec`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
+        if (!form) return null;
+        const fields = {};
+        // hidden inputs (CSRF等)
+        form.querySelectorAll('input[type=hidden]').forEach(el => {
+          if (el.name) fields[el.name] = el.value;
         });
-        const buffer = await res.arrayBuffer();
-        const bytes = Array.from(new Uint8Array(buffer));
-        return { status: res.status, contentType: res.headers.get('content-type'), length: bytes.length, bytes: bytes, mode: 'POST' };
-      }, { baseUrl: FLAM_URL, urlPath: m.url });
-      console.log(`    mode=${response.mode}, status=${response.status}, type=${response.contentType}, size=${response.length}`);
+        // text/number inputs (デフォルト値)
+        form.querySelectorAll('input[type=text], input[type=number]').forEach(el => {
+          if (el.name && el.value) fields[el.name] = el.value;
+        });
+        // select の選択値
+        form.querySelectorAll('select').forEach(sel => {
+          if (sel.name) fields[sel.name] = sel.value;
+        });
+        // checkbox/radio (チェック済みのみ)
+        form.querySelectorAll('input[type=checkbox]:checked, input[type=radio]:checked').forEach(el => {
+          if (el.name) fields[el.name] = el.value;
+        });
+        return { action: form.action || '', method: form.method || 'POST', fields };
+      });
 
-      if (response.status !== 200 || response.length < 50) {
-        console.log(`    ⚠️ Failed (status=${response.status}, size=${response.length})`);
-        summary.files.push({ file: m.file, status: 'failed', bytes: 0 });
+      if (!formInfo) {
+        console.log(`    ⚠️ No form on /${m.url}/export`);
+        summary.files.push({ file: m.file, status: 'no_form' });
         continue;
       }
 
-      const buf = Buffer.from(response.bytes);
+      // file-format を CSV に上書き
+      formInfo.fields['file-format'] = 'csv';
+      formInfo.fields['format'] = 'csv';
+
+      // Playwright の APIRequestContext で POST (Node側fetch・Bufferを直接取得)
+      const postUrl = `${FLAM_URL}/${m.url}/export/exec`;
+      const apiRes = await context.request.post(postUrl, { form: formInfo.fields });
+      const status = apiRes.status();
+      const contentType = apiRes.headers()['content-type'] || '';
+
+      if (status !== 200) {
+        console.log(`    ⚠️ POST ${postUrl} → status=${status}`);
+        summary.files.push({ file: m.file, status: 'failed', http_status: status });
+        continue;
+      }
+
+      const rawBuf = await apiRes.body();  // Buffer (バイナリ直接、CDP serializeなし)
+      console.log(`    POST status=${status}, type=${contentType}, raw=${rawBuf.length.toLocaleString()}B`);
+
+      if (rawBuf.length < 50) {
+        console.log(`    ⚠️ Body too small`);
+        summary.files.push({ file: m.file, status: 'failed', bytes: rawBuf.length });
+        continue;
+      }
+
+      // 文字コード判定 → UTF-8 化
       let text;
       try {
-        text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+        text = new TextDecoder('utf-8', { fatal: true }).decode(rawBuf);
       } catch (e) {
-        text = new TextDecoder('shift_jis', { fatal: false }).decode(buf);
+        text = new TextDecoder('shift_jis', { fatal: false }).decode(rawBuf);
       }
       text = text.replace(/^﻿/, '');
 
-      // Save as gzip (5-10x smaller than raw CSV)
+      // gzip圧縮で保存 (5-10x圧縮)
       const utf8Buf = Buffer.from(text, 'utf8');
       const gzipped = zlib.gzipSync(utf8Buf, { level: 9 });
       const outPath = path.join(SNAPSHOT_DIR, `${m.file}.gz`);
