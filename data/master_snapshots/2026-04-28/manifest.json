@@ -1,0 +1,30 @@
+{
+  "date": "2026-04-28",
+  "files": [
+    {
+      "file": "m_customers.csv",
+      "status": "failed",
+      "bytes": 0
+    },
+    {
+      "file": "m_products.csv",
+      "status": "failed",
+      "bytes": 0
+    },
+    {
+      "file": "m_suppliers.csv",
+      "status": "failed",
+      "bytes": 0
+    },
+    {
+      "file": "m_destinations.csv",
+      "status": "failed",
+      "bytes": 0
+    },
+    {
+      "file": "m_customerproductprices.csv",
+      "status": "failed",
+      "bytes": 0
+    }
+  ]
+}
