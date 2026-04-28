@@ -46,8 +46,5 @@ jobs:
           git push origin main || echo "no changes to push"
         continue-on-error: true
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+      # GitHub Pages deploy step removed (2026-04-29) — migrated to Cloudflare Pages.
+      # Cloudflare Pages auto-deploys from the main branch via Cloudflare's GitHub integration.
