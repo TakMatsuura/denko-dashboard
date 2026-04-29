@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-28T23:57:30.677Z",
-  "today": "2026-04-29",
+  "generated_at": "2026-04-29T23:57:18.250Z",
+  "today": "2026-04-30",
   "labels": {
     "customers": "得意先マスタ",
     "products": "商品マスタ",
@@ -25,11 +25,27 @@
         "destinations": null,
         "customerproductprices": null
       }
+    },
+    {
+      "date": "2026-04-30",
+      "counts": {
+        "customers": null,
+        "products": null,
+        "suppliers": null,
+        "destinations": null,
+        "customerproductprices": null
+      }
     }
   ],
   "diff": {
     "added": {},
     "removed": {},
-    "count_change": {}
+    "count_change": {
+      "customers": 0,
+      "products": 0,
+      "suppliers": 0,
+      "destinations": 0,
+      "customerproductprices": 0
+    }
   }
 }
