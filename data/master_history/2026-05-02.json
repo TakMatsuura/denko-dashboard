@@ -1,0 +1,11 @@
+{
+  "date": "2026-05-02",
+  "counts": {
+    "customers": null,
+    "products": null,
+    "suppliers": null,
+    "destinations": null,
+    "customerproductprices": null
+  },
+  "codes": {}
+}
