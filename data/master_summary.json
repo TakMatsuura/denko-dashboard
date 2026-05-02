@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-01T23:54:29.028Z",
-  "today": "2026-05-02",
+  "generated_at": "2026-05-02T23:44:35.263Z",
+  "today": "2026-05-03",
   "labels": {
     "customers": "得意先マスタ",
     "products": "商品マスタ",
@@ -48,6 +48,16 @@
     },
     {
       "date": "2026-05-02",
+      "counts": {
+        "customers": null,
+        "products": null,
+        "suppliers": null,
+        "destinations": null,
+        "customerproductprices": null
+      }
+    },
+    {
+      "date": "2026-05-03",
       "counts": {
         "customers": null,
         "products": null,
