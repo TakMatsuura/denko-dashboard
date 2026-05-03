@@ -1,11 +1,7 @@
 node_modules/
 package-lock.json
-# public/ 配下は build 出力中心のため基本除外、ただし手書きの Cloudflare 配信ファイルは例外
-public/*
-!public/phase-m/
-!public/functions/
-!public/data/
-!public/denko_logo.png
+# public/ は Cloudflare Pages 配信元 (main ブランチ直接配信)
+# build 出力を含めて全て git管理対象 (例外: tmp/log/巨大バイナリ)
 /tmp/
 .env
 *.log

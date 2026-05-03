@@ -37,14 +37,16 @@ jobs:
       - name: Build HTML
         run: node build_html.js
 
-      - name: Commit Master History
+      - name: Commit Master History + Built Dashboard
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/master_history/ data/master_summary.json || true
-          git diff --staged --quiet || git commit -m "chore: update master history $(date -u +%Y-%m-%d)"
+          git add data/master_history/ data/master_summary.json public/index.html public/.nojekyll || true
+          git diff --staged --quiet || git commit -m "chore: daily dashboard build $(date -u +%Y-%m-%d)"
+          # rebase で他の commit と衝突を避ける (Phase M 関連 push と並列の可能性)
+          git pull --rebase origin main || true
           git push origin main || echo "no changes to push"
         continue-on-error: true
 
-      # GitHub Pages deploy step removed (2026-04-29) — migrated to Cloudflare Pages.
       # Cloudflare Pages auto-deploys from the main branch via Cloudflare's GitHub integration.
+      # 旧 gh-pages ブランチは廃止 (2026-05-03)。public/ 配下を main に直接 commit する。
