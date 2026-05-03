@@ -1,14 +1,14 @@
 name: Fetch Past FY Data
 
-# 過去会計年度のデータをFLAMから一度取得して main にコミット
+# 過去会計年度のデータをFLAMから取得して main にコミット
 # 手動 trigger 専用 (workflow_dispatch)
-# 入力: target_fy (例: 2024 → FY2024 = 2024/05/01〜2025/04/30)
+# 入力: target_fys = カンマ区切り (例: "2021,2022,2023,2024" で4年分一括取得)
 
 on:
   workflow_dispatch:
     inputs:
-      target_fy:
-        description: '取得対象FY (例: 2024, 2025)'
+      target_fys:
+        description: '取得対象FY (カンマ区切り 例: 2021,2022,2023,2024)'
         required: true
         type: string
 
@@ -18,25 +18,33 @@ permissions:
 jobs:
   fetch-past-fy:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate input
+      - name: Validate inputs
         run: |
-          if ! echo "${{ inputs.target_fy }}" | grep -qE '^[0-9]{4}$'; then
-            echo "❌ target_fy は4桁の年 (例: 2024) で指定してください"
-            exit 1
-          fi
-          # 現FY の場合は通常の Update DENKO Dashboard を使うように促す
+          # 現FY 計算
           CURRENT_FY=$(date -u +%Y)
           CURRENT_MONTH=$(date -u +%m)
           if [ "$CURRENT_MONTH" -lt "05" ]; then
             CURRENT_FY=$((CURRENT_FY - 1))
           fi
-          if [ "${{ inputs.target_fy }}" = "$CURRENT_FY" ]; then
-            echo "⚠️ 現FY ($CURRENT_FY) は通常の 'Update DENKO Dashboard' workflow を使ってください"
-            exit 1
-          fi
+          echo "現FY: $CURRENT_FY"
+          echo "対象FYs: ${{ inputs.target_fys }}"
+
+          # カンマ区切りを検証
+          IFS=',' read -ra FYS <<< "${{ inputs.target_fys }}"
+          for fy in "${FYS[@]}"; do
+            fy=$(echo "$fy" | tr -d ' ')
+            if ! echo "$fy" | grep -qE '^[0-9]{4}$'; then
+              echo "❌ 不正なFY: '$fy' (4桁の年で指定)"
+              exit 1
+            fi
+            if [ "$fy" = "$CURRENT_FY" ]; then
+              echo "⚠️ 現FY ($CURRENT_FY) はスキップ (Update DENKO Dashboard を使用)"
+            fi
+          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,25 +56,50 @@ jobs:
           npm install playwright
           npx playwright install chromium
 
-      - name: Download FY${{ inputs.target_fy }} from FLAM
+      - name: Fetch each past FY
         env:
           FLAM_ID: ${{ secrets.FLAM_ID }}
           FLAM_PW: ${{ secrets.FLAM_PW }}
-        run: node download_flam.js --fy ${{ inputs.target_fy }}
-
-      - name: Copy CSVs to public/data/fy/${{ inputs.target_fy }}/
         run: |
-          mkdir -p public/data/fy/${{ inputs.target_fy }}
-          cp /tmp/flam_data_fy${{ inputs.target_fy }}/*.csv public/data/fy/${{ inputs.target_fy }}/ || true
-          ls -la public/data/fy/${{ inputs.target_fy }}/
-          echo "📊 取得ファイル数:"
-          ls public/data/fy/${{ inputs.target_fy }}/ | wc -l
+          CURRENT_FY=$(date -u +%Y)
+          CURRENT_MONTH=$(date -u +%m)
+          if [ "$CURRENT_MONTH" -lt "05" ]; then
+            CURRENT_FY=$((CURRENT_FY - 1))
+          fi
 
-      - name: Commit past FY data
+          IFS=',' read -ra FYS <<< "${{ inputs.target_fys }}"
+          for raw_fy in "${FYS[@]}"; do
+            fy=$(echo "$raw_fy" | tr -d ' ')
+            if [ "$fy" = "$CURRENT_FY" ]; then
+              echo "===== Skip 現FY ($fy) ====="
+              continue
+            fi
+            echo ""
+            echo "===== Fetching FY${fy} ====="
+            node download_flam.js --fy "$fy" || echo "⚠️ FY${fy} 取得失敗 (データなし or タイムアウト)"
+
+            # CSVをコピー
+            mkdir -p public/data/fy/${fy}
+            cp /tmp/flam_data_fy${fy}/*.csv public/data/fy/${fy}/ 2>/dev/null || echo "  ${fy} のCSVなし"
+
+            # ファイルサイズ確認 (空CSV = データなしの判定)
+            if [ -d "public/data/fy/${fy}" ]; then
+              echo "  📊 取得結果:"
+              for f in public/data/fy/${fy}/*.csv; do
+                if [ -f "$f" ]; then
+                  size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+                  lines=$(wc -l < "$f" 2>/dev/null || echo 0)
+                  echo "    $(basename $f): ${size}bytes / ${lines}行"
+                fi
+              done
+            fi
+          done
+
+      - name: Commit all past FY data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/data/fy/${{ inputs.target_fy }}/ || true
-          git diff --staged --quiet || git commit -m "data: FY${{ inputs.target_fy }} データ取得 (過去FY)"
+          git add public/data/fy/ || true
+          git diff --staged --quiet || git commit -m "data: 過去FY 一括取得 (${{ inputs.target_fys }})"
           git pull --rebase origin main || true
           git push origin main || echo "no changes to push"
