@@ -316,6 +316,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('orders',this)">Orders</div>
     <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
     <div class="nav-tab" onclick="showTab('multi-year',this)">Multi-Year</div>
+    <div class="nav-tab" onclick="showTab('biz-analysis',this)">📊 経営分析</div>
     <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
   <div class="nav-right" style="display:flex;gap:12px;align-items:center;">
@@ -707,6 +708,82 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
 </div>
 
+<!-- 経営分析 (Phase O: Claude Opus 4.7 経営洞察) -->
+<div id="biz-analysis" class="section">
+  <div class="page-header">
+    <h2>📊 経営分析 (Business Insights)</h2>
+    <div class="subtitle">過去5年 (FY21-FY25) のデータを Claude Opus 4.7 が読み解いた経営参謀レポート</div>
+  </div>
+  <div class="content">
+    <!-- メタ情報 -->
+    <div id="biz-meta" style="background:#f8f8f8;border-left:4px solid #1F4E78;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#666;border-radius:4px;">
+      読込中...
+    </div>
+
+    <!-- エグゼクティブサマリ -->
+    <div class="card full" style="margin-bottom:16px;border-top:4px solid #1F4E78;">
+      <div class="card-header"><h3>🎯 エグゼクティブサマリ</h3></div>
+      <div class="card-body">
+        <div id="biz-exec-summary" style="font-size:1.0rem;line-height:1.9;color:#222;padding:8px 4px;">
+          <div style="text-align:center;color:#888;padding:40px;">読込中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FY別解説 -->
+    <div class="card full" style="margin-bottom:16px;">
+      <div class="card-header"><h3>📅 FY別 業績解説</h3></div>
+      <div class="card-body">
+        <div id="biz-fy-commentary" style="display:flex;flex-direction:column;gap:14px;"></div>
+      </div>
+    </div>
+
+    <!-- 月次異常解説 -->
+    <div class="card full" style="margin-bottom:16px;">
+      <div class="card-header">
+        <h3>⚡ 月次変動の深掘り解説</h3>
+        <div class="badge" id="biz-anomaly-count"></div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:0.85em;color:#666;margin-bottom:12px;line-height:1.5;">
+          📘 前月比/YoY ±30%超の異常月について、「なぜ伸びた / なぜ落ちた」を固有名詞ベースで解説しています。
+        </div>
+        <div id="biz-monthly-anomalies" style="display:flex;flex-direction:column;gap:12px;"></div>
+      </div>
+    </div>
+
+    <!-- 季節性 + 顧客分析 -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h3>🌊 季節性パターン</h3></div>
+        <div class="card-body" id="biz-seasonality"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>👥 顧客インサイト</h3></div>
+        <div class="card-body" id="biz-customer-insights"></div>
+      </div>
+    </div>
+
+    <!-- スポット案件 -->
+    <div class="card full" style="margin-top:16px;margin-bottom:16px;">
+      <div class="card-header"><h3>🎯 スポット大型案件 分析</h3></div>
+      <div class="card-body" id="biz-spot-deals"></div>
+    </div>
+
+    <!-- リスク + アクション -->
+    <div class="grid-2">
+      <div class="card" style="border-top:4px solid #C00000;">
+        <div class="card-header"><h3>⚠️ リスク</h3></div>
+        <div class="card-body" id="biz-risks" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+      <div class="card" style="border-top:4px solid #548235;">
+        <div class="card-header"><h3>💡 経営アクション</h3></div>
+        <div class="card-body" id="biz-actions" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MASTER (Phase 0.3-5: マスタ履歴ダッシュボード) -->
 <div id="master" class="section">
   <div class="page-header"><h2>Master Data History</h2><div class="subtitle">FLAMマスタの日次変更履歴 (件数推移・新規追加・廃番化・単価変更)</div></div>
@@ -960,6 +1037,10 @@ function showTab(id, el) {
   // ★Phase 0.3-5: Master タブ初期描画
   if (id === 'master') {
     try { renderMaster(); } catch (e) { console.error('renderMaster failed:', e); }
+  }
+  // ★Phase O: 経営分析タブ初期描画
+  if (id === 'biz-analysis') {
+    try { renderBizAnalysis(); } catch (e) { console.error('renderBizAnalysis failed:', e); }
   }
   // ★Phase N: Multi-Year タブ → 期間セレクタに切替
   const fySel = document.getElementById('fy-selector');
@@ -2910,6 +2991,192 @@ function buildOrders(orders) {
       <td class="text-right">${fmt(r.amount)}</td><td>${r.deliveryDate}</td><td class="${stClass}">${r.status}</td>`;
     tbody.appendChild(tr);
   });
+}
+
+// ===========================================
+// Phase O: 経営分析 (Business Insights) renderer
+// ===========================================
+let _bizAnalysisLoaded = false;
+let _bizAnalysisData = null;
+
+async function renderBizAnalysis() {
+  if (_bizAnalysisLoaded) return;
+  try {
+    const res = await fetch('data/biz_analysis.json?t=' + Date.now());
+    if (!res.ok) throw new Error('biz_analysis.json fetch failed: ' + res.status);
+    const j = await res.json();
+    _bizAnalysisData = j;
+    _bizAnalysisLoaded = true;
+
+    // メタ情報
+    const genDate = new Date(j.generated_at);
+    const genStr = genDate.toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const cost = j.cost_usd ? `約${Math.round(j.cost_usd * 150)}円` : '不明';
+    document.getElementById('biz-meta').innerHTML = `
+      🤖 <strong>${j.model || 'Claude Opus 4.7'}</strong> による分析 /
+      生成日時: <strong>${genStr}</strong> /
+      対象FY: <strong>${(j.target_fys || []).join(', ')}</strong> /
+      生成コスト: <strong>${cost}</strong> /
+      所要時間: <strong>${j.elapsed_sec ? j.elapsed_sec.toFixed(0) + '秒' : 'N/A'}</strong>
+    `;
+
+    // エグゼクティブサマリ
+    const execEl = document.getElementById('biz-exec-summary');
+    execEl.textContent = j.executive_summary || '(未生成)';
+
+    // FY別解説
+    const fyEl = document.getElementById('biz-fy-commentary');
+    fyEl.innerHTML = (j.fy_commentary || []).map(fy => {
+      const customers = (fy.highlight_customers || []).map(c => `<span style="display:inline-block;background:#E2EFDA;color:#375623;padding:3px 10px;border-radius:14px;font-size:0.8em;margin:2px;">${escapeHtml(c)}</span>`).join('');
+      return `
+        <div style="border-left:4px solid #2E75B6;padding:14px 18px;background:#F2F2F2;border-radius:6px;">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px;">
+            <span style="font-size:1.2rem;font-weight:700;color:#1F4E78;">${escapeHtml(fy.fy)}</span>
+            <span style="font-size:0.95rem;color:#444;font-weight:600;">${escapeHtml(fy.headline || '')}</span>
+          </div>
+          <div style="font-size:0.9rem;line-height:1.7;color:#333;margin-bottom:8px;">${escapeHtml(fy.drivers || '')}</div>
+          ${customers ? `<div style="margin-top:6px;"><span style="font-size:0.8em;color:#666;margin-right:6px;">注目顧客:</span>${customers}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // 月次異常
+    document.getElementById('biz-anomaly-count').textContent = `${(j.monthly_anomalies || []).length}件`;
+    const monthEl = document.getElementById('biz-monthly-anomalies');
+    monthEl.innerHTML = (j.monthly_anomalies || []).map(m => {
+      const isSpike = m.type === 'spike';
+      const color = isSpike ? '#548235' : '#C00000';
+      const bgColor = isSpike ? '#E2EFDA' : '#FCE4D6';
+      const icon = isSpike ? '📈' : '📉';
+      return `
+        <div style="border-left:4px solid ${color};padding:12px 16px;background:${bgColor};border-radius:6px;">
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+            <span style="font-size:1.05rem;">${icon}</span>
+            <span style="font-weight:700;color:${color};font-size:0.95rem;">${escapeHtml(m.ym || '')} (${escapeHtml(m.fy || '')})</span>
+            <span style="font-size:0.9rem;color:#222;font-weight:600;">${escapeHtml(m.headline || '')}</span>
+          </div>
+          <div style="font-size:0.85rem;line-height:1.65;color:#333;margin-bottom:6px;">${escapeHtml(m.explanation || '')}</div>
+          ${m.actionable ? `<div style="font-size:0.8rem;color:#444;background:#fff;border-radius:4px;padding:6px 10px;margin-top:6px;"><strong>💡 アクション提案:</strong> ${escapeHtml(m.actionable)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    // 季節性
+    const seasonEl = document.getElementById('biz-seasonality');
+    if (j.seasonality) {
+      const s = j.seasonality;
+      seasonEl.innerHTML = `
+        <div style="font-size:0.9rem;line-height:1.7;color:#333;margin-bottom:12px;">${escapeHtml(s.pattern || '')}</div>
+        <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;">
+          <div><strong style="color:#548235;">🌟 強い月:</strong> ${(s.best_months || []).map(escapeHtml).join(', ')}</div>
+          <div><strong style="color:#C00000;">📉 弱い月:</strong> ${(s.weak_months || []).map(escapeHtml).join(', ')}</div>
+        </div>
+        ${(s.comments || []).length > 0 ? `<ul style="font-size:0.85rem;line-height:1.7;color:#444;padding-left:20px;margin:0;">${(s.comments || []).map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>` : ''}
+      `;
+    } else {
+      seasonEl.innerHTML = '<div style="color:#888;">データなし</div>';
+    }
+
+    // 顧客インサイト
+    const custEl = document.getElementById('biz-customer-insights');
+    if (j.customer_insights) {
+      const c = j.customer_insights;
+      const renderCustList = (list, color) => (list || []).map(x => `
+        <li style="margin-bottom:6px;">
+          <strong style="color:${color};">${escapeHtml(x.name || '')}</strong>
+          <span style="font-size:0.8em;color:#666;">${escapeHtml(x.trend || '')}</span>
+          <div style="font-size:0.8em;color:#555;line-height:1.5;margin-top:2px;">${escapeHtml(x.comment || '')}</div>
+        </li>
+      `).join('');
+      custEl.innerHTML = `
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700;color:#548235;margin-bottom:6px;font-size:0.9rem;">📈 成長顧客</div>
+          <ul style="font-size:0.85rem;padding-left:18px;margin:0;">${renderCustList(c.key_growth_customers, '#548235')}</ul>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-weight:700;color:#C00000;margin-bottom:6px;font-size:0.9rem;">📉 衰退顧客</div>
+          <ul style="font-size:0.85rem;padding-left:18px;margin:0;">${renderCustList(c.key_declining_customers, '#C00000')}</ul>
+        </div>
+        ${c.new_customer_highlights ? `<div style="margin-bottom:10px;font-size:0.85rem;line-height:1.65;background:#E2EFDA;padding:8px 10px;border-radius:4px;"><strong>🆕 新規開拓:</strong> ${escapeHtml(c.new_customer_highlights)}</div>` : ''}
+        ${c.churn_risk ? `<div style="font-size:0.85rem;line-height:1.65;background:#FCE4D6;padding:8px 10px;border-radius:4px;"><strong>⚠️ 離脱リスク:</strong> ${escapeHtml(c.churn_risk)}</div>` : ''}
+      `;
+    } else {
+      custEl.innerHTML = '<div style="color:#888;">データなし</div>';
+    }
+
+    // スポット案件
+    const spotEl = document.getElementById('biz-spot-deals');
+    if (j.spot_deal_insights) {
+      const s = j.spot_deal_insights;
+      const topSpots = (s.top_spots || []).slice(0, 10).map(x => `
+        <tr>
+          <td>${escapeHtml(x.ym || '')}</td>
+          <td>${escapeHtml(x.product || '')}</td>
+          <td class="text-right">${escapeHtml(x.sales || '')}</td>
+          <td>${escapeHtml(x.comment || '')}</td>
+        </tr>
+      `).join('');
+      spotEl.innerHTML = `
+        <div style="font-size:0.9rem;line-height:1.7;color:#333;margin-bottom:12px;">${escapeHtml(s.summary || '')}</div>
+        ${topSpots ? `
+          <div style="overflow-x:auto;margin-bottom:12px;">
+            <table style="width:100%;font-size:0.85rem;">
+              <thead><tr><th>年月</th><th>商品</th><th class="text-right">売上</th><th>コメント</th></tr></thead>
+              <tbody>${topSpots}</tbody>
+            </table>
+          </div>
+        ` : ''}
+        ${s.continuity_outlook ? `<div style="font-size:0.85rem;line-height:1.65;background:#FFE699;padding:10px 12px;border-radius:4px;"><strong>🔮 継続性の見立て:</strong> ${escapeHtml(s.continuity_outlook)}</div>` : ''}
+      `;
+    } else {
+      spotEl.innerHTML = '<div style="color:#888;">データなし</div>';
+    }
+
+    // リスク
+    const sevColor = { high: '#C00000', medium: '#DAA520', low: '#666' };
+    const sevLabel = { high: '🔴 HIGH', medium: '🟡 MEDIUM', low: '🟢 LOW' };
+    const riskEl = document.getElementById('biz-risks');
+    riskEl.innerHTML = (j.risks || []).map(r => {
+      const c = sevColor[r.severity] || '#666';
+      const lbl = sevLabel[r.severity] || r.severity;
+      return `
+        <div style="border-left:4px solid ${c};padding:10px 14px;background:#fff;border-radius:4px;border:1px solid #eee;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+            <span style="font-size:0.75em;font-weight:700;color:${c};">${lbl}</span>
+            <span style="font-weight:700;color:#222;font-size:0.95rem;">${escapeHtml(r.title || '')}</span>
+          </div>
+          <div style="font-size:0.85rem;line-height:1.6;color:#444;">${escapeHtml(r.description || '')}</div>
+        </div>
+      `;
+    }).join('');
+
+    // アクション
+    const priColor = { P1: '#C00000', P2: '#DAA520', P3: '#548235' };
+    const priLabel = { P1: '🔥 P1 最優先', P2: '⚡ P2 重要', P3: '✓ P3 推奨' };
+    const actionEl = document.getElementById('biz-actions');
+    actionEl.innerHTML = (j.actions || []).map(a => {
+      const c = priColor[a.priority] || '#666';
+      const lbl = priLabel[a.priority] || a.priority;
+      return `
+        <div style="border-left:4px solid ${c};padding:10px 14px;background:#fff;border-radius:4px;border:1px solid #eee;">
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+            <span style="font-size:0.75em;font-weight:700;color:${c};">${lbl}</span>
+            <span style="font-weight:700;color:#222;font-size:0.95rem;">${escapeHtml(a.title || '')}</span>
+          </div>
+          <div style="font-size:0.85rem;line-height:1.6;color:#444;">${escapeHtml(a.description || '')}</div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error('renderBizAnalysis failed:', e);
+    document.getElementById('biz-meta').innerHTML = `<span style="color:#C00000;">⚠️ 経営分析データの読込失敗: ${escapeHtml(e.message)}</span>`;
+    document.getElementById('biz-exec-summary').innerHTML = '<div style="color:#C00000;text-align:center;padding:40px;">データ読込に失敗しました。 <code>biz_analysis/generate_analysis.js</code> を再実行してください。</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 loadData();

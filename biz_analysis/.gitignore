@@ -1,0 +1,4 @@
+# intermediate / local-only output
+anomalies.json
+biz_analysis.json
+*_raw.txt
