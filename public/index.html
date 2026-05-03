@@ -614,11 +614,14 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 
       <!-- 顧客-3: パレート (集中度) -->
       <div class="card full" style="margin-bottom:16px">
-        <div class="card-header"><h3>📊 顧客集中度 (パレート曲線)</h3>
+        <div class="card-header"><h3>📊 顧客集中度 (上位の顧客で売上の何%を占めるか)</h3>
           <div style="display:flex;gap:8px;align-items:center;">
             <label style="font-size:0.85em;color:#666;">FY:</label>
             <select id="customer-pareto-fy" onchange="drawCustomerPareto()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
           </div>
+        </div>
+        <div class="card-body" style="padding-bottom:8px;font-size:0.85em;color:#666;line-height:1.5">
+          📘 <strong>見方</strong>: 棒グラフ=各顧客の売上 (左軸・降順) / 赤折れ線=累計% (右軸)。 折れ線が早く上がるほど少数の顧客に売上が集中。
         </div>
         <div class="card-body" style="height:350px"><canvas id="chart-customer-pareto"></canvas></div>
         <div class="card-body" style="padding-top:0">
@@ -698,8 +701,11 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 
       <!-- 仕入先-3: 集中度 -->
       <div class="card full" style="margin-bottom:16px">
-        <div class="card-header"><h3>📊 仕入集中度 (パレート曲線)</h3>
+        <div class="card-header"><h3>📊 仕入集中度 (上位の仕入先で仕入額の何%を占めるか)</h3>
           <select id="supplier-pareto-fy" onchange="drawSupplierPareto()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+        </div>
+        <div class="card-body" style="padding-bottom:8px;font-size:0.85em;color:#666;line-height:1.5">
+          📘 <strong>見方</strong>: 棒グラフ=各仕入先の仕入額 (左軸・降順) / 赤折れ線=累計% (右軸)。 折れ線が早く上がるほど少数の仕入先に集中=依存リスク高。
         </div>
         <div class="card-body" style="height:350px"><canvas id="chart-supplier-pareto"></canvas></div>
         <div class="card-body" style="padding-top:0">
@@ -805,7 +811,7 @@ budget: `
 
 <script>
 const MASTER_SUMMARY = {
-  "generated_at": "2026-05-03T06:44:27.769Z",
+  "generated_at": "2026-05-03T06:50:36.898Z",
   "today": "2026-05-03",
   "labels": {
     "customers": "得意先マスタ",
@@ -1376,7 +1382,9 @@ function drawCustomerPareto() {
     const top10 = cumPercents[9] || 0;
     const top20 = cumPercents[19] || 0;
     const totalCust = Object.values(data).filter(d => d.sales > 0).length;
-    sm.innerHTML = `総取引顧客数: <strong>${totalCust}社</strong> / 上位3社で <strong>${top3.toFixed(1)}%</strong> / 上位10社で <strong>${top10.toFixed(1)}%</strong> / 上位20社で <strong>${top20.toFixed(1)}%</strong> をカバー`;
+    // 集中度の判定 (Top10で80%以上 = 高集中)
+    const concentration = top10 >= 80 ? '🔴 集中度: 高 (依存リスク注意)' : top10 >= 60 ? '🟡 集中度: 中' : '🟢 集中度: 分散傾向';
+    sm.innerHTML = `総取引顧客数: <strong>${totalCust}社</strong>　|　売上の <strong>${top3.toFixed(1)}%</strong> を上位<strong>3社</strong>が稼ぐ　|　上位<strong>10社</strong>で <strong>${top10.toFixed(1)}%</strong>　|　上位<strong>20社</strong>で <strong>${top20.toFixed(1)}%</strong><br>${concentration}`;
   }
 }
 
@@ -1631,7 +1639,8 @@ function drawSupplierPareto() {
     const top3 = cumPercents[2] || 0;
     const top10 = cumPercents[9] || 0;
     const totalSup = Object.values(data).filter(d => d.purchase > 0).length;
-    sm.innerHTML = `総取引仕入先数: <strong>${totalSup}社</strong> / 上位3社で <strong>${top3.toFixed(1)}%</strong> / 上位10社で <strong>${top10.toFixed(1)}%</strong> をカバー`;
+    const concentration = top3 >= 70 ? '🔴 集中度: 高 (依存リスク注意)' : top3 >= 50 ? '🟡 集中度: 中' : '🟢 集中度: 分散傾向';
+    sm.innerHTML = `総取引仕入先数: <strong>${totalSup}社</strong>　|　仕入の <strong>${top3.toFixed(1)}%</strong> を上位<strong>3社</strong>から　|　上位<strong>10社</strong>で <strong>${top10.toFixed(1)}%</strong><br>${concentration}`;
   }
 }
 
