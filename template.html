@@ -533,48 +533,190 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 <!-- MULTI-YEAR (Phase N: 多年度分析ダッシュボード) -->
 <div id="multi-year" class="section">
   <div class="page-header"><h2>Multi-Year Analysis</h2><div class="subtitle" id="multi-year-subtitle">FY2020〜FY2026 の年次比較・長期トレンド分析</div></div>
+
+  <!-- サブタブ -->
+  <div style="display:flex;gap:8px;border-bottom:2px solid var(--c-border, #ddd);padding:0 16px;background:#fff;">
+    <div class="my-subtab my-subtab-active" data-target="my-overview" onclick="showMultiYearSubtab('my-overview',this)" style="padding:10px 18px;cursor:pointer;font-weight:600;border-bottom:3px solid #1F4E78;color:#1F4E78;">📊 Overview</div>
+    <div class="my-subtab" data-target="my-customer" onclick="showMultiYearSubtab('my-customer',this)" style="padding:10px 18px;cursor:pointer;font-weight:600;border-bottom:3px solid transparent;color:#666;">👥 得意先 (顧客分析)</div>
+    <div class="my-subtab" data-target="my-supplier" onclick="showMultiYearSubtab('my-supplier',this)" style="padding:10px 18px;cursor:pointer;font-weight:600;border-bottom:3px solid transparent;color:#666;">🏭 仕入先 (仕入分析)</div>
+    <div style="margin-left:auto;padding:10px;font-size:0.85rem;color:#666;"><span class="badge" id="multi-year-loading-status">読込中...</span></div>
+  </div>
+
   <div class="content">
-    <!-- N-1: 年度比較サマリー -->
-    <div class="card full" style="margin-bottom:16px">
-      <div class="card-header"><h3>📊 年度比較サマリー (FY別)</h3>
-        <div class="badge" id="multi-year-loading-status">読込中...</div>
+    <!-- =============================================== -->
+    <!-- サブタブ: Overview (年度比較サマリ・トレンド) -->
+    <!-- =============================================== -->
+    <div id="my-overview" class="my-subsection" style="display:block">
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📊 年度比較サマリー (FY別)</h3></div>
+        <div class="card-body" style="overflow-x:auto">
+          <table id="multi-year-summary-table" style="min-width:900px">
+            <thead>
+              <tr>
+                <th>FY</th>
+                <th class="text-right">期間</th>
+                <th class="text-right">年間売上</th>
+                <th class="text-right">粗利益</th>
+                <th class="text-right">粗利率</th>
+                <th class="text-right">仕入</th>
+                <th class="text-right">明細件数</th>
+                <th class="text-right">YoY売上</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-      <div class="card-body" style="overflow-x:auto">
-        <table id="multi-year-summary-table" style="min-width:900px">
-          <thead>
-            <tr>
-              <th>FY</th>
-              <th class="text-right">期間</th>
-              <th class="text-right">年間売上</th>
-              <th class="text-right">粗利益</th>
-              <th class="text-right">粗利率</th>
-              <th class="text-right">仕入</th>
-              <th class="text-right">明細件数</th>
-              <th class="text-right">YoY売上</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📈 年度売上推移 (棒グラフ)</h3></div>
+        <div class="card-body" style="height:350px"><canvas id="chart-multi-year-sales"></canvas></div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>⏱️ 長期月次トレンド (FY20〜FY26 全期間連結)</h3></div>
+        <div class="card-body" style="height:350px"><canvas id="chart-multi-year-monthly"></canvas></div>
+      </div>
+
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>🔥 月別 売上ヒートマップ (FY × 月)</h3></div>
+        <div class="card-body" style="overflow-x:auto">
+          <table id="multi-year-heatmap" style="min-width:800px"></table>
+        </div>
       </div>
     </div>
 
-    <!-- N-1.5: 売上推移 (年並列棒グラフ) -->
-    <div class="card full" style="margin-bottom:16px">
-      <div class="card-header"><h3>📈 年度売上推移 (棒グラフ)</h3></div>
-      <div class="card-body" style="height:350px"><canvas id="chart-multi-year-sales"></canvas></div>
+    <!-- =============================================== -->
+    <!-- サブタブ: 得意先 (顧客分析) -->
+    <!-- =============================================== -->
+    <div id="my-customer" class="my-subsection" style="display:none">
+      <!-- 顧客-1: Top20 ランキング -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>🏆 売上 Top20 顧客ランキング</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:0.85em;color:#666;">FY:</label>
+            <select id="customer-top20-fy" onchange="drawCustomerTop20()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+          </div>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table id="customer-top20-table" style="min-width:700px">
+            <thead><tr><th>順位</th><th>得意先名</th><th class="text-right">売上</th><th class="text-right">粗利</th><th class="text-right">粗利率</th><th class="text-right">構成比</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 顧客-2: 年次推移 (折れ線) -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📈 主要顧客 年次推移 (Top10)</h3></div>
+        <div class="card-body" style="height:400px"><canvas id="chart-customer-trend"></canvas></div>
+      </div>
+
+      <!-- 顧客-3: パレート (集中度) -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📊 顧客集中度 (パレート曲線)</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:0.85em;color:#666;">FY:</label>
+            <select id="customer-pareto-fy" onchange="drawCustomerPareto()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+          </div>
+        </div>
+        <div class="card-body" style="height:350px"><canvas id="chart-customer-pareto"></canvas></div>
+        <div class="card-body" style="padding-top:0">
+          <div id="customer-pareto-summary" style="font-size:0.9em;color:#444;line-height:1.8"></div>
+        </div>
+      </div>
+
+      <!-- 顧客-4: 新規/離脱 -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h3>🆕 新規顧客 (FY別の取引開始)</h3></div>
+          <div class="card-body"><table id="customer-new-table"><thead><tr><th>FY</th><th class="text-right">新規顧客数</th><th class="text-right">初年度売上</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>👋 離脱顧客 (直近2年取引なし)</h3></div>
+          <div class="card-body"><table id="customer-churn-table"><thead><tr><th>得意先名</th><th class="text-right">最終FY</th><th class="text-right">過去累計</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- 顧客-5: 顧客 × 部門マトリクス -->
+      <div class="card full" style="margin-top:16px;margin-bottom:16px">
+        <div class="card-header"><h3>📊 顧客 × 部門マトリクス (Top20)</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label style="font-size:0.85em;color:#666;">FY:</label>
+            <select id="customer-matrix-fy" onchange="drawCustomerMatrix()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+          </div>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table id="customer-matrix-table" style="min-width:600px"></table>
+        </div>
+      </div>
+
+      <!-- 顧客-6: 粗利率ランキング -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h3>🏅 粗利率ランキング Top10 (高い順)</h3>
+            <select id="customer-margin-fy" onchange="drawCustomerMarginRanking()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+          </div>
+          <div class="card-body"><table id="customer-margin-top-table"><thead><tr><th>得意先名</th><th class="text-right">売上</th><th class="text-right">粗利率</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>⚠️ 粗利率ランキング Bottom10 (低い順)</h3></div>
+          <div class="card-body"><table id="customer-margin-bottom-table"><thead><tr><th>得意先名</th><th class="text-right">売上</th><th class="text-right">粗利率</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- 顧客-7: 客単価推移 -->
+      <div class="card full" style="margin-top:16px;margin-bottom:16px">
+        <div class="card-header"><h3>💴 客単価推移 (顧客あたり平均売上)</h3></div>
+        <div class="card-body" style="height:300px"><canvas id="chart-customer-arpu"></canvas></div>
+        <div class="card-body" style="padding-top:0;font-size:0.85em;color:#666">※ 客単価 = 年間売上 ÷ 取引顧客数</div>
+      </div>
     </div>
 
-    <!-- N-4: 長期月次トレンド -->
-    <div class="card full" style="margin-bottom:16px">
-      <div class="card-header"><h3>⏱️ 長期月次トレンド (FY20〜FY26 全期間連結)</h3></div>
-      <div class="card-body" style="height:350px"><canvas id="chart-multi-year-monthly"></canvas></div>
-    </div>
+    <!-- =============================================== -->
+    <!-- サブタブ: 仕入先 (仕入分析) -->
+    <!-- =============================================== -->
+    <div id="my-supplier" class="my-subsection" style="display:none">
+      <!-- 仕入先-1: Top20 -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>🏆 仕入額 Top20 仕入先ランキング</h3>
+          <select id="supplier-top20-fy" onchange="drawSupplierTop20()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table id="supplier-top20-table" style="min-width:600px">
+            <thead><tr><th>順位</th><th>仕入先名</th><th class="text-right">仕入額</th><th class="text-right">明細件数</th><th class="text-right">構成比</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
 
-    <!-- N-3: YoY 成長率ヒートマップ -->
-    <div class="card full" style="margin-bottom:16px">
-      <div class="card-header"><h3>🔥 月別 売上ヒートマップ (FY × 月)</h3></div>
-      <div class="card-body" style="overflow-x:auto">
-        <table id="multi-year-heatmap" style="min-width:800px"></table>
+      <!-- 仕入先-2: 年次推移 -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📈 主要仕入先 年次推移 (Top10)</h3></div>
+        <div class="card-body" style="height:400px"><canvas id="chart-supplier-trend"></canvas></div>
+      </div>
+
+      <!-- 仕入先-3: 集中度 -->
+      <div class="card full" style="margin-bottom:16px">
+        <div class="card-header"><h3>📊 仕入集中度 (パレート曲線)</h3>
+          <select id="supplier-pareto-fy" onchange="drawSupplierPareto()" style="padding:4px 8px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;"></select>
+        </div>
+        <div class="card-body" style="height:350px"><canvas id="chart-supplier-pareto"></canvas></div>
+        <div class="card-body" style="padding-top:0">
+          <div id="supplier-pareto-summary" style="font-size:0.9em;color:#444;line-height:1.8"></div>
+        </div>
+      </div>
+
+      <!-- 仕入先-4: 新規/離脱 -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h3>🆕 新規仕入先 (FY別)</h3></div>
+          <div class="card-body"><table id="supplier-new-table"><thead><tr><th>FY</th><th class="text-right">新規数</th><th class="text-right">初年度仕入</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>👋 離脱仕入先 (直近2年取引なし)</h3></div>
+          <div class="card-body"><table id="supplier-churn-table"><thead><tr><th>仕入先名</th><th class="text-right">最終FY</th><th class="text-right">過去累計</th></tr></thead><tbody></tbody></table></div>
+        </div>
       </div>
     </div>
   </div>
@@ -939,6 +1081,455 @@ function drawMultiYearHeatmap() {
   });
   html += '</tbody>';
   tbl.innerHTML = html;
+}
+
+// =====================================================
+// Multi-Year サブタブ切替 + 顧客分析・仕入先分析
+// =====================================================
+function showMultiYearSubtab(targetId, el) {
+  document.querySelectorAll('.my-subsection').forEach(s => s.style.display = 'none');
+  document.getElementById(targetId).style.display = 'block';
+  document.querySelectorAll('.my-subtab').forEach(t => {
+    t.classList.remove('my-subtab-active');
+    t.style.borderBottomColor = 'transparent';
+    t.style.color = '#666';
+  });
+  el.classList.add('my-subtab-active');
+  el.style.borderBottomColor = '#1F4E78';
+  el.style.color = '#1F4E78';
+  // 初回描画
+  if (targetId === 'my-customer' && !_customerAnalysisRendered) renderCustomerAnalysis();
+  if (targetId === 'my-supplier' && !_supplierAnalysisRendered) renderSupplierAnalysis();
+}
+
+// =====================================================
+// 顧客分析 (全FY の dept_customer_sales.csv を集計)
+// =====================================================
+let _customerAnalysisRendered = false;
+let _customerData = {};  // { fy: { [customerName]: { sales, profit, count, depts: {...} } } }
+let _customerFYHistory = {};  // { customerName: [fy1, fy2, ...] } 取引履歴
+
+async function renderCustomerAnalysis() {
+  const status = document.getElementById('multi-year-loading-status');
+  if (status) status.textContent = '顧客分析データ読込中...';
+
+  // 全FY の dept_customer_sales.csv を fetch
+  const fyList = Object.keys(_multiYearData).map(Number).sort();
+  for (const fy of fyList) {
+    let customerSalesText = '';
+    if (fy === FY_YEAR && typeof CSV_DATA !== 'undefined') {
+      customerSalesText = CSV_DATA.dept_customer_sales || '';
+    } else {
+      try {
+        const r = await fetch(`data/fy/${fy}/dept_customer_sales.csv`);
+        if (r.ok) customerSalesText = await r.text();
+      } catch {}
+    }
+    const rows = parseCSV(customerSalesText);
+    const denkiRows = rows.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+    const byCust = {};
+    denkiRows.forEach(r => {
+      const name = r['得意先名'] || '(不明)';
+      if (!byCust[name]) byCust[name] = { sales: 0, profit: 0, count: 0, depts: {} };
+      byCust[name].sales += toNum(r['純売上額']);
+      byCust[name].profit += toNum(r['粗利益']);
+      byCust[name].count += toNum(r['明細数']);
+      const dept = r['部門コード'];
+      byCust[name].depts[dept] = (byCust[name].depts[dept] || 0) + toNum(r['純売上額']);
+    });
+    _customerData[fy] = byCust;
+    Object.keys(byCust).forEach(name => {
+      if (byCust[name].sales > 0) {
+        if (!_customerFYHistory[name]) _customerFYHistory[name] = [];
+        _customerFYHistory[name].push(fy);
+      }
+    });
+  }
+  _customerAnalysisRendered = true;
+  if (status) status.textContent = `読込完了 (${fyList.length}FY)`;
+
+  // FY セレクタ初期化
+  const fyOpts = fyList.slice().reverse().map(y => `<option value="${y}">FY${y}</option>`).join('');
+  ['customer-top20-fy', 'customer-pareto-fy', 'customer-matrix-fy', 'customer-margin-fy'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = fyOpts;
+  });
+
+  drawCustomerTop20();
+  drawCustomerTrend();
+  drawCustomerPareto();
+  drawCustomerNewChurn();
+  drawCustomerMatrix();
+  drawCustomerMarginRanking();
+  drawCustomerARPU();
+}
+
+// 顧客-1: Top20
+function drawCustomerTop20() {
+  const fy = parseInt(document.getElementById('customer-top20-fy')?.value) || FY_YEAR;
+  const data = _customerData[fy] || {};
+  const total = Object.values(data).reduce((s, v) => s + v.sales, 0);
+  const sorted = Object.entries(data).sort((a, b) => b[1].sales - a[1].sales).slice(0, 20);
+  const tbody = document.querySelector('#customer-top20-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = sorted.map(([name, d], i) => {
+    const margin = d.sales > 0 ? (d.profit / d.sales * 100).toFixed(1) : 0;
+    const ratio = total > 0 ? (d.sales / total * 100).toFixed(1) : 0;
+    return `<tr><td>${i + 1}</td><td>${name}</td><td class="text-right">${fmtOku(d.sales)}</td><td class="text-right">${fmtOku(d.profit)}</td><td class="text-right">${margin}%</td><td class="text-right">${ratio}%</td></tr>`;
+  }).join('');
+}
+
+// 顧客-2: 年次推移 (Top10 折れ線)
+let _customerTrendChart = null;
+function drawCustomerTrend() {
+  const ctx = document.getElementById('chart-customer-trend');
+  if (!ctx) return;
+  if (_customerTrendChart) _customerTrendChart.destroy();
+  const fyList = Object.keys(_customerData).map(Number).sort();
+  // 全FY 累計売上 Top10
+  const cumulative = {};
+  Object.values(_customerData).forEach(byCust => {
+    Object.entries(byCust).forEach(([name, d]) => {
+      cumulative[name] = (cumulative[name] || 0) + d.sales;
+    });
+  });
+  const top10 = Object.entries(cumulative).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]);
+  const COLORS_LOCAL = ['#0070d2','#1b96ff','#3ba755','#fe9339','#9050e9','#04a9c9','#e8006f','#444','#c0392b','#16a085'];
+  _customerTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: fyList.map(y => `FY${y}`),
+      datasets: top10.map((name, i) => ({
+        label: name.length > 15 ? name.slice(0, 15) + '…' : name,
+        data: fyList.map(fy => (_customerData[fy]?.[name]?.sales) || 0),
+        borderColor: COLORS_LOCAL[i],
+        backgroundColor: COLORS_LOCAL[i] + '22',
+        tension: 0.2,
+        fill: false,
+      })),
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+  });
+}
+
+// 顧客-3: パレート (集中度)
+let _customerParetoChart = null;
+function drawCustomerPareto() {
+  const ctx = document.getElementById('chart-customer-pareto');
+  if (!ctx) return;
+  if (_customerParetoChart) _customerParetoChart.destroy();
+  const fy = parseInt(document.getElementById('customer-pareto-fy')?.value) || FY_YEAR;
+  const data = _customerData[fy] || {};
+  const total = Object.values(data).reduce((s, v) => s + v.sales, 0);
+  const sorted = Object.entries(data).sort((a, b) => b[1].sales - a[1].sales).slice(0, 30);
+  let cum = 0;
+  const cumPercents = sorted.map(([n, d]) => { cum += d.sales; return total > 0 ? (cum / total * 100) : 0; });
+  _customerParetoChart = new Chart(ctx, {
+    data: {
+      labels: sorted.map(x => x[0].length > 8 ? x[0].slice(0, 8) + '…' : x[0]),
+      datasets: [
+        { type: 'bar', label: '売上', data: sorted.map(x => x[1].sales), backgroundColor: '#0070d2cc', yAxisID: 'y' },
+        { type: 'line', label: '累計%', data: cumPercents, borderColor: '#ea001e', backgroundColor: '#ea001e', tension: 0.2, fill: false, yAxisID: 'y1', pointRadius: 2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { type: 'linear', position: 'left', ticks: { callback: v => fmtOku(v) } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { drawOnChartArea: false } },
+      }
+    }
+  });
+  // サマリ
+  const sm = document.getElementById('customer-pareto-summary');
+  if (sm) {
+    const top3 = cumPercents[2] || 0;
+    const top10 = cumPercents[9] || 0;
+    const top20 = cumPercents[19] || 0;
+    const totalCust = Object.values(data).filter(d => d.sales > 0).length;
+    sm.innerHTML = `総取引顧客数: <strong>${totalCust}社</strong> / 上位3社で <strong>${top3.toFixed(1)}%</strong> / 上位10社で <strong>${top10.toFixed(1)}%</strong> / 上位20社で <strong>${top20.toFixed(1)}%</strong> をカバー`;
+  }
+}
+
+// 顧客-4: 新規/離脱
+function drawCustomerNewChurn() {
+  const fyList = Object.keys(_customerData).map(Number).sort();
+  // 新規顧客: その顧客の取引履歴の最初のFY が当該FY
+  const newByFy = {};
+  fyList.forEach(fy => newByFy[fy] = []);
+  Object.entries(_customerFYHistory).forEach(([name, fys]) => {
+    const firstFy = Math.min(...fys);
+    if (newByFy[firstFy]) newByFy[firstFy].push(name);
+  });
+  const tbodyNew = document.querySelector('#customer-new-table tbody');
+  if (tbodyNew) {
+    tbodyNew.innerHTML = fyList.slice().reverse().map(fy => {
+      const names = newByFy[fy] || [];
+      const firstYearSales = names.reduce((s, name) => s + ((_customerData[fy]?.[name]?.sales) || 0), 0);
+      return `<tr><td><strong>FY${fy}</strong></td><td class="text-right">${names.length}社</td><td class="text-right">${fmtOku(firstYearSales)}</td></tr>`;
+    }).join('');
+  }
+  // 離脱顧客: 最終取引FY が (現FY - 2) 以前
+  const churnThreshold = FY_YEAR - 2;
+  const churn = [];
+  Object.entries(_customerFYHistory).forEach(([name, fys]) => {
+    const lastFy = Math.max(...fys);
+    if (lastFy < churnThreshold) {
+      const cumulative = fys.reduce((s, fy) => s + ((_customerData[fy]?.[name]?.sales) || 0), 0);
+      churn.push({ name, lastFy, cumulative });
+    }
+  });
+  churn.sort((a, b) => b.cumulative - a.cumulative);
+  const tbodyChurn = document.querySelector('#customer-churn-table tbody');
+  if (tbodyChurn) {
+    tbodyChurn.innerHTML = churn.slice(0, 20).map(c =>
+      `<tr><td>${c.name}</td><td class="text-right">FY${c.lastFy}</td><td class="text-right">${fmtOku(c.cumulative)}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:#999;">該当なし</td></tr>';
+  }
+}
+
+// 顧客-5: 顧客 × 部門マトリクス
+function drawCustomerMatrix() {
+  const fy = parseInt(document.getElementById('customer-matrix-fy')?.value) || FY_YEAR;
+  const data = _customerData[fy] || {};
+  const sorted = Object.entries(data).sort((a, b) => b[1].sales - a[1].sales).slice(0, 20);
+  const tbl = document.getElementById('customer-matrix-table');
+  if (!tbl) return;
+  let html = '<thead><tr><th>得意先名</th>';
+  DENKI_DEPTS.forEach(d => html += `<th class="text-right">${d}</th>`);
+  html += '<th class="text-right">合計</th></tr></thead><tbody>';
+  sorted.forEach(([name, d]) => {
+    html += `<tr><td>${name}</td>`;
+    DENKI_DEPTS.forEach(dept => {
+      const v = d.depts[dept] || 0;
+      html += `<td class="text-right">${v > 0 ? fmtOku(v) : '-'}</td>`;
+    });
+    html += `<td class="text-right"><strong>${fmtOku(d.sales)}</strong></td></tr>`;
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+// 顧客-6: 粗利率ランキング
+function drawCustomerMarginRanking() {
+  const fy = parseInt(document.getElementById('customer-margin-fy')?.value) || FY_YEAR;
+  const data = _customerData[fy] || {};
+  // 売上100万以上の顧客のみ (ノイズ除去)
+  const filtered = Object.entries(data).filter(([n, d]) => d.sales >= 1000000)
+    .map(([n, d]) => ({ name: n, sales: d.sales, margin: d.sales > 0 ? (d.profit / d.sales * 100) : 0 }));
+  const top = filtered.slice().sort((a, b) => b.margin - a.margin).slice(0, 10);
+  const bottom = filtered.slice().sort((a, b) => a.margin - b.margin).slice(0, 10);
+  const tbodyTop = document.querySelector('#customer-margin-top-table tbody');
+  const tbodyBot = document.querySelector('#customer-margin-bottom-table tbody');
+  if (tbodyTop) tbodyTop.innerHTML = top.map(c =>
+    `<tr><td>${c.name}</td><td class="text-right">${fmtOku(c.sales)}</td><td class="text-right"><strong>${c.margin.toFixed(1)}%</strong></td></tr>`).join('');
+  if (tbodyBot) tbodyBot.innerHTML = bottom.map(c =>
+    `<tr><td>${c.name}</td><td class="text-right">${fmtOku(c.sales)}</td><td class="text-right"><strong style="color:${c.margin < 15 ? '#c00' : '#444'}">${c.margin.toFixed(1)}%</strong></td></tr>`).join('');
+}
+
+// 顧客-7: 客単価推移
+let _customerARPUChart = null;
+function drawCustomerARPU() {
+  const ctx = document.getElementById('chart-customer-arpu');
+  if (!ctx) return;
+  if (_customerARPUChart) _customerARPUChart.destroy();
+  const fyList = Object.keys(_customerData).map(Number).sort();
+  const arpuList = fyList.map(fy => {
+    const data = _customerData[fy] || {};
+    const total = Object.values(data).reduce((s, v) => s + v.sales, 0);
+    const count = Object.values(data).filter(v => v.sales > 0).length;
+    return count > 0 ? total / count : 0;
+  });
+  const countList = fyList.map(fy => {
+    const data = _customerData[fy] || {};
+    return Object.values(data).filter(v => v.sales > 0).length;
+  });
+  _customerARPUChart = new Chart(ctx, {
+    data: {
+      labels: fyList.map(y => `FY${y}`),
+      datasets: [
+        { type: 'line', label: '客単価 (左軸)', data: arpuList, borderColor: '#0070d2', backgroundColor: '#0070d220', tension: 0.2, yAxisID: 'y' },
+        { type: 'bar', label: '取引顧客数 (右軸)', data: countList, backgroundColor: '#fe933980', yAxisID: 'y1' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { type: 'linear', position: 'left', ticks: { callback: v => fmtOku(v) }, title: { display: true, text: '客単価' } },
+        y1: { type: 'linear', position: 'right', ticks: { callback: v => v + '社' }, grid: { drawOnChartArea: false }, title: { display: true, text: '顧客数' } },
+      }
+    }
+  });
+}
+
+// =====================================================
+// 仕入先分析
+// =====================================================
+let _supplierAnalysisRendered = false;
+let _supplierData = {};  // { fy: { [supplierName]: { purchase, count } } }
+let _supplierFYHistory = {};
+
+async function renderSupplierAnalysis() {
+  const status = document.getElementById('multi-year-loading-status');
+  if (status) status.textContent = '仕入先分析データ読込中...';
+
+  const fyList = Object.keys(_multiYearData).map(Number).sort();
+  for (const fy of fyList) {
+    let purchaseText = '';
+    if (fy === FY_YEAR && typeof CSV_DATA !== 'undefined') {
+      purchaseText = CSV_DATA.dept_purchase || '';
+    } else {
+      try {
+        const r = await fetch(`data/fy/${fy}/dept_purchase.csv`);
+        if (r.ok) purchaseText = await r.text();
+      } catch {}
+    }
+    const rows = parseCSV(purchaseText);
+    const denki = rows.filter(r => DENKI_DEPTS.includes(r['部門コード']));
+    const bySup = {};
+    denki.forEach(r => {
+      const name = r['仕入先名'] || '(不明)';
+      if (!bySup[name]) bySup[name] = { purchase: 0, count: 0 };
+      bySup[name].purchase += toNum(r['純仕入額']);
+      bySup[name].count += toNum(r['明細数']);
+    });
+    _supplierData[fy] = bySup;
+    Object.keys(bySup).forEach(name => {
+      if (bySup[name].purchase > 0) {
+        if (!_supplierFYHistory[name]) _supplierFYHistory[name] = [];
+        _supplierFYHistory[name].push(fy);
+      }
+    });
+  }
+  _supplierAnalysisRendered = true;
+  if (status) status.textContent = `読込完了 (${fyList.length}FY)`;
+
+  const fyOpts = fyList.slice().reverse().map(y => `<option value="${y}">FY${y}</option>`).join('');
+  ['supplier-top20-fy', 'supplier-pareto-fy'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = fyOpts;
+  });
+
+  drawSupplierTop20();
+  drawSupplierTrend();
+  drawSupplierPareto();
+  drawSupplierNewChurn();
+}
+
+// 仕入先-1: Top20
+function drawSupplierTop20() {
+  const fy = parseInt(document.getElementById('supplier-top20-fy')?.value) || FY_YEAR;
+  const data = _supplierData[fy] || {};
+  const total = Object.values(data).reduce((s, v) => s + v.purchase, 0);
+  const sorted = Object.entries(data).sort((a, b) => b[1].purchase - a[1].purchase).slice(0, 20);
+  const tbody = document.querySelector('#supplier-top20-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = sorted.map(([name, d], i) => {
+    const ratio = total > 0 ? (d.purchase / total * 100).toFixed(1) : 0;
+    return `<tr><td>${i + 1}</td><td>${name}</td><td class="text-right">${fmtOku(d.purchase)}</td><td class="text-right">${fmt(d.count)}</td><td class="text-right">${ratio}%</td></tr>`;
+  }).join('');
+}
+
+// 仕入先-2: 年次推移
+let _supplierTrendChart = null;
+function drawSupplierTrend() {
+  const ctx = document.getElementById('chart-supplier-trend');
+  if (!ctx) return;
+  if (_supplierTrendChart) _supplierTrendChart.destroy();
+  const fyList = Object.keys(_supplierData).map(Number).sort();
+  const cumulative = {};
+  Object.values(_supplierData).forEach(bySup => {
+    Object.entries(bySup).forEach(([name, d]) => { cumulative[name] = (cumulative[name] || 0) + d.purchase; });
+  });
+  const top10 = Object.entries(cumulative).sort((a, b) => b[1] - a[1]).slice(0, 10).map(x => x[0]);
+  const COLORS_LOCAL = ['#0070d2','#1b96ff','#3ba755','#fe9339','#9050e9','#04a9c9','#e8006f','#444','#c0392b','#16a085'];
+  _supplierTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: fyList.map(y => `FY${y}`),
+      datasets: top10.map((name, i) => ({
+        label: name.length > 15 ? name.slice(0, 15) + '…' : name,
+        data: fyList.map(fy => (_supplierData[fy]?.[name]?.purchase) || 0),
+        borderColor: COLORS_LOCAL[i],
+        backgroundColor: COLORS_LOCAL[i] + '22',
+        tension: 0.2,
+        fill: false,
+      })),
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+  });
+}
+
+// 仕入先-3: パレート
+let _supplierParetoChart = null;
+function drawSupplierPareto() {
+  const ctx = document.getElementById('chart-supplier-pareto');
+  if (!ctx) return;
+  if (_supplierParetoChart) _supplierParetoChart.destroy();
+  const fy = parseInt(document.getElementById('supplier-pareto-fy')?.value) || FY_YEAR;
+  const data = _supplierData[fy] || {};
+  const total = Object.values(data).reduce((s, v) => s + v.purchase, 0);
+  const sorted = Object.entries(data).sort((a, b) => b[1].purchase - a[1].purchase).slice(0, 30);
+  let cum = 0;
+  const cumPercents = sorted.map(([n, d]) => { cum += d.purchase; return total > 0 ? (cum / total * 100) : 0; });
+  _supplierParetoChart = new Chart(ctx, {
+    data: {
+      labels: sorted.map(x => x[0].length > 8 ? x[0].slice(0, 8) + '…' : x[0]),
+      datasets: [
+        { type: 'bar', label: '仕入額', data: sorted.map(x => x[1].purchase), backgroundColor: '#fe9339cc', yAxisID: 'y' },
+        { type: 'line', label: '累計%', data: cumPercents, borderColor: '#ea001e', tension: 0.2, fill: false, yAxisID: 'y1', pointRadius: 2 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { type: 'linear', position: 'left', ticks: { callback: v => fmtOku(v) } },
+        y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { drawOnChartArea: false } },
+      }
+    }
+  });
+  const sm = document.getElementById('supplier-pareto-summary');
+  if (sm) {
+    const top3 = cumPercents[2] || 0;
+    const top10 = cumPercents[9] || 0;
+    const totalSup = Object.values(data).filter(d => d.purchase > 0).length;
+    sm.innerHTML = `総取引仕入先数: <strong>${totalSup}社</strong> / 上位3社で <strong>${top3.toFixed(1)}%</strong> / 上位10社で <strong>${top10.toFixed(1)}%</strong> をカバー`;
+  }
+}
+
+// 仕入先-4: 新規/離脱
+function drawSupplierNewChurn() {
+  const fyList = Object.keys(_supplierData).map(Number).sort();
+  const newByFy = {};
+  fyList.forEach(fy => newByFy[fy] = []);
+  Object.entries(_supplierFYHistory).forEach(([name, fys]) => {
+    const firstFy = Math.min(...fys);
+    if (newByFy[firstFy]) newByFy[firstFy].push(name);
+  });
+  const tbodyNew = document.querySelector('#supplier-new-table tbody');
+  if (tbodyNew) {
+    tbodyNew.innerHTML = fyList.slice().reverse().map(fy => {
+      const names = newByFy[fy] || [];
+      const firstYearPurchase = names.reduce((s, name) => s + ((_supplierData[fy]?.[name]?.purchase) || 0), 0);
+      return `<tr><td><strong>FY${fy}</strong></td><td class="text-right">${names.length}社</td><td class="text-right">${fmtOku(firstYearPurchase)}</td></tr>`;
+    }).join('');
+  }
+  const churnThreshold = FY_YEAR - 2;
+  const churn = [];
+  Object.entries(_supplierFYHistory).forEach(([name, fys]) => {
+    const lastFy = Math.max(...fys);
+    if (lastFy < churnThreshold) {
+      const cumulative = fys.reduce((s, fy) => s + ((_supplierData[fy]?.[name]?.purchase) || 0), 0);
+      churn.push({ name, lastFy, cumulative });
+    }
+  });
+  churn.sort((a, b) => b.cumulative - a.cumulative);
+  const tbodyChurn = document.querySelector('#supplier-churn-table tbody');
+  if (tbodyChurn) {
+    tbodyChurn.innerHTML = churn.slice(0, 20).map(c =>
+      `<tr><td>${c.name}</td><td class="text-right">FY${c.lastFy}</td><td class="text-right">${fmtOku(c.cumulative)}</td></tr>`
+    ).join('') || '<tr><td colspan="3" style="text-align:center;color:#999;">該当なし</td></tr>';
+  }
 }
 
 // ★Phase 0.3-5: マスタ履歴ダッシュボード描画
