@@ -1,6 +1,11 @@
 node_modules/
 package-lock.json
-public/
+# public/ 配下は build 出力中心のため基本除外、ただし手書きの Cloudflare 配信ファイルは例外
+public/*
+!public/phase-m/
+!public/functions/
+!public/data/
+!public/denko_logo.png
 /tmp/
 .env
 *.log
