@@ -1442,15 +1442,22 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     const m = r['集計年月'];
     denkiMonthly[m] = (denkiMonthly[m] || 0) + (toNum(r['純売上額']));
   });
-  const months = budget.map(b => b['月']);
-  const monthlyBudget = BUDGET_ANNUAL / 12;
+  // budget が空 (過去FY) なら、 SELECTED_FY ベースで12ヶ月を生成
+  let months = budget.map(b => b['月']);
+  if (months.length === 0) {
+    const fy = SELECTED_FY;
+    for (let i = 5; i <= 12; i++) months.push(`${fy}/${String(i).padStart(2, '0')}`);
+    for (let i = 1; i <= 4; i++) months.push(`${fy + 1}/${String(i).padStart(2, '0')}`);
+  }
+  const hasBudget = budget.length > 0;
+  const monthlyBudget = hasBudget ? BUDGET_ANNUAL / 12 : 0;
   new Chart(document.getElementById('chart-budget-vs-actual'), {
     type: 'bar',
     data: {
       labels: months.map(monthLabel),
       datasets: [
-        { label: 'Actual (電力系)', data: months.map(m => denkiMonthly[m] || 0), backgroundColor: months.map(m => (denkiMonthly[m] || 0) >= monthlyBudget ? '#3ba755cc' : '#DAA520cc'), barPercentage: 0.5, categoryPercentage: 0.6 },
-        { label: 'Budget', data: months.map(() => monthlyBudget), borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], type: 'line', fill: false, pointStyle: 'circle', pointRadius: 3, pointBackgroundColor: '#ea001e' },
+        { label: 'Actual (電力系)', data: months.map(m => denkiMonthly[m] || 0), backgroundColor: months.map(m => hasBudget && (denkiMonthly[m] || 0) >= monthlyBudget ? '#3ba755cc' : '#DAA520cc'), barPercentage: 0.5, categoryPercentage: 0.6 },
+        ...(hasBudget ? [{ label: 'Budget', data: months.map(() => monthlyBudget), borderColor: '#ea001e', borderWidth: 2, borderDash: [6,3], type: 'line', fill: false, pointStyle: 'circle', pointRadius: 3, pointBackgroundColor: '#ea001e' }] : []),
       ]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { usePointStyle: true } } }, scales: { y: { ticks: { callback: v => fmtM(v) } } },
@@ -1559,7 +1566,13 @@ function buildBudget(budget, deptSales) {
     denkiProfitMonthly[m] = (denkiProfitMonthly[m] || 0) + (toNum(r['粗利益']));
   });
 
-  const months = budget.map(b => b['月']);
+  // 過去FY 表示時 budget が空なら 12ヶ月生成 (予算は0)
+  let months = budget.map(b => b['月']);
+  if (months.length === 0) {
+    const fy = SELECTED_FY;
+    for (let i = 5; i <= 12; i++) months.push(`${fy}/${String(i).padStart(2, '0')}`);
+    for (let i = 1; i <= 4; i++) months.push(`${fy + 1}/${String(i).padStart(2, '0')}`);
+  }
   const monthlyActuals = months.map(m => denkiMonthly[m] || 0);
   const monthlyBudgets = months.map(b => toNum(budget.find(x => x['月'] === b)?.['売上予算']));
 
