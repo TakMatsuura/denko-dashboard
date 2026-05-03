@@ -317,7 +317,12 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
     <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
-  <div class="nav-right" id="fy-header-label">FY2025 (2025/05 - 2026/04)</div>
+  <div class="nav-right" style="display:flex;gap:12px;align-items:center;">
+    <select id="fy-selector" onchange="onFYChange()" style="padding:4px 10px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;cursor:pointer;background:#fff;color:#333;">
+      <!-- FY 候補は JS で動的生成 -->
+    </select>
+    <span id="fy-header-label">FY2025 (2025/05 - 2026/04)</span>
+  </div>
 </div>
 
 <!-- OVERVIEW -->
@@ -578,20 +583,82 @@ const FY_RANGE_LABEL = `${FY_LABEL} (${FY_YEAR}/05/01〜${FY_NEXT}/04/30)`;
 const FY_NEXT_START = `${FY_NEXT}-05-01`;
 const FY_PERFORMANCE_TITLE = `FY${FY_YEAR} Annual Performance Summary`;
 
+// 表示中のFY (年度フィルターで変更可能。デフォルト = 現FY)
+let SELECTED_FY = FY_YEAR;
+
+// 年度切替ハンドラ
+function onFYChange() {
+  const sel = document.getElementById('fy-selector');
+  if (!sel) return;
+  const newFY = parseInt(sel.value);
+  if (isNaN(newFY) || newFY === SELECTED_FY) return;
+  SELECTED_FY = newFY;
+  updateFYLabels();
+  // データ再ロード or 過去FYなら警告表示
+  if (newFY === FY_YEAR) {
+    location.reload();  // 現FY: 通常通りリロード
+  } else {
+    showPastFYNotice(newFY);
+  }
+}
+
+// 過去FY選択時の通知 (データなし)
+function showPastFYNotice(fy) {
+  const banner = document.createElement('div');
+  banner.id = 'past-fy-notice';
+  banner.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#fff3cd;border:2px solid #DAA520;color:#856404;padding:14px 24px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-width:600px;';
+  banner.innerHTML = `⚠️ FY${fy} (${fy}/05 - ${fy+1}/04) のデータは現在保持されていません<br>
+    <span style="font-weight:400;font-size:0.9em;">過去FYデータの取得・閲覧機能は今後の機能追加予定 (WBS タスク化)。<br>
+    現在表示中のデータは <strong>FY${FY_YEAR}</strong> のままです。</span>`;
+  // 既存のバナーがあれば削除
+  const old = document.getElementById('past-fy-notice');
+  if (old) old.remove();
+  document.body.appendChild(banner);
+  // セレクタは元に戻す
+  setTimeout(() => {
+    document.getElementById('fy-selector').value = FY_YEAR;
+    SELECTED_FY = FY_YEAR;
+  }, 100);
+  // 8秒後にバナー消す
+  setTimeout(() => banner.remove(), 8000);
+}
+
+// FY ラベルを SELECTED_FY に応じて動的更新
+function updateFYLabels() {
+  const fy = SELECTED_FY;
+  const fyNext = fy + 1;
+  const fullLabel = `FY${fy} (${fy}/05 - ${fyNext}/04)`;
+  const fyLabel = `FY${String(fy).slice(2)}`;
+  const headerEl = document.getElementById('fy-header-label');
+  if (headerEl) headerEl.textContent = fullLabel;
+  const summaryEl = document.getElementById('fy-summary-label');
+  if (summaryEl) summaryEl.textContent = `FY${fy} Annual Performance Summary`;
+}
+
+// FY ドロップダウン候補を生成 (現FY を中心に過去5年・先1年)
+function populateFYSelector() {
+  const sel = document.getElementById('fy-selector');
+  if (!sel) return;
+  const candidates = [];
+  for (let y = FY_YEAR - 5; y <= FY_YEAR + 1; y++) candidates.push(y);
+  candidates.reverse();  // 新しい年が上
+  sel.innerHTML = candidates.map(y => {
+    const label = `FY${y} (${y}/05〜${y + 1}/04)`;
+    const selected = y === FY_YEAR ? ' selected' : '';
+    return `<option value="${y}"${selected}>${label}</option>`;
+  }).join('');
+}
+
 // FY 関連表示の動的書き換え (DOMContentLoaded 後に実行)
 document.addEventListener('DOMContentLoaded', () => {
-  const headerEl = document.getElementById('fy-header-label');
-  if (headerEl) headerEl.textContent = FY_FULL_LABEL;
-  const summaryEl = document.getElementById('fy-summary-label');
-  if (summaryEl) summaryEl.textContent = FY_PERFORMANCE_TITLE;
+  populateFYSelector();
+  updateFYLabels();
 
   // 受注残の FY25 ラベルを動的化 (現FY = FY26 等)
   document.querySelectorAll('h3').forEach(h => {
     if (h.textContent === 'FY25 受注残明細') h.textContent = `${FY_LABEL} 受注残明細`;
     if (h.textContent === 'FY25 受注残 by Customer') h.textContent = `${FY_LABEL} 受注残 by Customer`;
   });
-  // KPI ラベル「FY25 受注残」 もクライアントレンダリング時に置換
-  // (動的生成される箇所は buildOverview 等の中で FY_LABEL を直接使うように改修要)
 });
 
 function showTab(id, el) {
