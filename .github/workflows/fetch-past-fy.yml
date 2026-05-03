@@ -78,9 +78,25 @@ jobs:
             echo "===== Fetching FY${fy} ====="
             node download_flam.js --fy "$fy" || echo "⚠️ FY${fy} 取得失敗 (データなし or タイムアウト)"
 
-            # CSVをコピー
+            # CSVをコピー (Shift-JIS → UTF-8 変換しながら)
             mkdir -p public/data/fy/${fy}
-            cp /tmp/flam_data_fy${fy}/*.csv public/data/fy/${fy}/ 2>/dev/null || echo "  ${fy} のCSVなし"
+            for src in /tmp/flam_data_fy${fy}/*.csv; do
+              if [ -f "$src" ]; then
+                base=$(basename "$src")
+                node -e "
+                  const fs = require('fs');
+                  const buf = fs.readFileSync('$src');
+                  let content;
+                  try {
+                    content = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+                  } catch (e) {
+                    content = new TextDecoder('shift_jis', { fatal: false }).decode(buf);
+                  }
+                  content = content.replace(/^\\uFEFF/, '');  // BOM 除去
+                  fs.writeFileSync('public/data/fy/${fy}/' + '$base', content, 'utf8');
+                " || cp "$src" "public/data/fy/${fy}/$base"
+              fi
+            done
 
             # ファイルサイズ確認 (空CSV = データなしの判定)
             if [ -d "public/data/fy/${fy}" ]; then
