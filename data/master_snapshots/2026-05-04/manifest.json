@@ -1,0 +1,40 @@
+{
+  "date": "2026-05-04",
+  "files": [
+    {
+      "file": "m_customers.csv.gz",
+      "status": "ok",
+      "raw_bytes": 190771,
+      "gz_bytes": 13007,
+      "rows": 213
+    },
+    {
+      "file": "m_products.csv.gz",
+      "status": "ok",
+      "raw_bytes": 42992866,
+      "gz_bytes": 1053846,
+      "rows": 108773
+    },
+    {
+      "file": "m_suppliers.csv.gz",
+      "status": "ok",
+      "raw_bytes": 107077,
+      "gz_bytes": 9262,
+      "rows": 136
+    },
+    {
+      "file": "m_destinations.csv.gz",
+      "status": "ok",
+      "raw_bytes": 59126,
+      "gz_bytes": 15224,
+      "rows": 302
+    },
+    {
+      "file": "m_customerproductprices.csv.gz",
+      "status": "ok",
+      "raw_bytes": 20961868,
+      "gz_bytes": 1226509,
+      "rows": 160183
+    }
+  ]
+}
