@@ -317,12 +317,12 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
     <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
-  <div class="nav-right">FY2025 (2025/05 - 2026/04)</div>
+  <div class="nav-right" id="fy-header-label">FY2025 (2025/05 - 2026/04)</div>
 </div>
 
 <!-- OVERVIEW -->
 <div id="overview" class="section active">
-  <div class="page-header"><h2>Performance Overview</h2><div class="subtitle">FY2025 Annual Performance Summary</div></div>
+  <div class="page-header"><h2>Performance Overview</h2><div class="subtitle" id="fy-summary-label">FY2025 Annual Performance Summary</div></div>
   <div class="content">
     <div class="kpi-row" id="kpi-overview"></div>
     <div class="grid-3">
@@ -564,6 +564,35 @@ if (sessionStorage.getItem('denko-auth') === '1') {
 const COLORS = ['#0176d3','#1b96ff','#3ba755','#fe9339','#9050e9','#04a9c9','#e8006f','#444','#c0392b','#16a085','#7f8c8d','#e67e22'];
 const BUDGET_ANNUAL = 720000000;
 const DENKI_DEPTS = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+
+// 会計年度 (FY) は 5月始まり / 4月末締め
+// 例: 2026-05-03 → FY2026 (2026/05 - 2027/04)
+//     2026-04-30 → FY2025 (2025/05 - 2026/04)
+const _FY_NOW = new Date();
+const FY_YEAR = _FY_NOW.getMonth() + 1 >= 5 ? _FY_NOW.getFullYear() : _FY_NOW.getFullYear() - 1;
+const FY_NEXT = FY_YEAR + 1;
+const FY_FULL_LABEL = `FY${FY_YEAR} (${FY_YEAR}/05 - ${FY_NEXT}/04)`;
+const FY_LABEL = `FY${String(FY_YEAR).slice(2)}`;       // 'FY26'
+const FY_NEXT_LABEL = `FY${String(FY_NEXT).slice(2)}`;   // 'FY27'
+const FY_RANGE_LABEL = `${FY_LABEL} (${FY_YEAR}/05/01〜${FY_NEXT}/04/30)`;
+const FY_NEXT_START = `${FY_NEXT}-05-01`;
+const FY_PERFORMANCE_TITLE = `FY${FY_YEAR} Annual Performance Summary`;
+
+// FY 関連表示の動的書き換え (DOMContentLoaded 後に実行)
+document.addEventListener('DOMContentLoaded', () => {
+  const headerEl = document.getElementById('fy-header-label');
+  if (headerEl) headerEl.textContent = FY_FULL_LABEL;
+  const summaryEl = document.getElementById('fy-summary-label');
+  if (summaryEl) summaryEl.textContent = FY_PERFORMANCE_TITLE;
+
+  // 受注残の FY25 ラベルを動的化 (現FY = FY26 等)
+  document.querySelectorAll('h3').forEach(h => {
+    if (h.textContent === 'FY25 受注残明細') h.textContent = `${FY_LABEL} 受注残明細`;
+    if (h.textContent === 'FY25 受注残 by Customer') h.textContent = `${FY_LABEL} 受注残 by Customer`;
+  });
+  // KPI ラベル「FY25 受注残」 もクライアントレンダリング時に置換
+  // (動的生成される箇所は buildOverview 等の中で FY_LABEL を直接使うように改修要)
+});
 
 function showTab(id, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -1649,10 +1678,10 @@ function buildOrders(orders) {
   const totalAmount = orders.reduce((s, r) => s + toNum(r[colAmount]), 0);
   const orderNums = new Set(orders.map(r => r['受注番号']));
 
-  // Backlog: not completed, split by 指定納期 into FY25 (<= 2026-04-30) and FY26 (>= 2026-05-01)
+  // Backlog: not completed, split by 指定納期 into 現FY (< FY_NEXT_START) and 次FY (>= FY_NEXT_START)
   const backlog = orders.filter(r => r[colStatus] !== '完了');
   const completed = orders.filter(r => r[colStatus] === '完了');
-  const FY26_START = '2026-05-01';
+  const FY26_START = FY_NEXT_START;  // 動的: 現FYの末翌日 (例: 2027-05-01)
   const backlogFY25 = backlog.filter(r => !r['指定納期'] || r['指定納期'] < FY26_START);
   const backlogFY26 = backlog.filter(r => r['指定納期'] && r['指定納期'] >= FY26_START);
   const backlogFY25Amt = backlogFY25.reduce((s, r) => s + toNum(r[colAmount]), 0);
@@ -1662,8 +1691,8 @@ function buildOrders(orders) {
   document.getElementById('kpi-orders').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">Total Orders (YTD)</div><div class="kpi-value">${fmtOku(totalAmount)}</div><div class="kpi-sub">${fmt(orderNums.size)} orders</div></div>
     <div class="kpi-card green"><div class="kpi-label">Completed (完了)</div><div class="kpi-value">${fmtOku(completedAmount)}</div><div class="kpi-sub">${completed.length} items</div></div>
-    <div class="kpi-card orange"><div class="kpi-label">FY25 受注残</div><div class="kpi-value">${fmtOku(backlogFY25Amt)}</div><div class="kpi-sub">${backlogFY25.length} items (〜2026/04)</div></div>
-    <div class="kpi-card red"><div class="kpi-label">FY26 受注残</div><div class="kpi-value">${fmtOku(backlogFY26Amt)}</div><div class="kpi-sub">${backlogFY26.length} items (2026/05〜)</div></div>
+    <div class="kpi-card orange"><div class="kpi-label">${FY_LABEL} 受注残</div><div class="kpi-value">${fmtOku(backlogFY25Amt)}</div><div class="kpi-sub">${backlogFY25.length} items (〜${FY_NEXT}/04)</div></div>
+    <div class="kpi-card red"><div class="kpi-label">${FY_NEXT_LABEL} 受注残</div><div class="kpi-value">${fmtOku(backlogFY26Amt)}</div><div class="kpi-sub">${backlogFY26.length} items (${FY_NEXT}/05〜)</div></div>
     <div class="kpi-card"><div class="kpi-label">Completion Rate</div><div class="kpi-value">${totalAmount>0?(completedAmount/totalAmount*100).toFixed(1):'0'}%</div></div>
   `;
 
@@ -1716,8 +1745,8 @@ function buildOrders(orders) {
       }
     });
   }
-  buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc', 'FY25');
-  buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc', 'FY26');
+  buildBacklogChart('chart-order-backlog-fy25', backlogFY25, '#fe9339cc', FY_LABEL);
+  buildBacklogChart('chart-order-backlog-fy26', backlogFY26, '#ea001ecc', FY_NEXT_LABEL);
 
   // Order table (aggregate by order number, last 7 days, max 10)
   const today = new Date();

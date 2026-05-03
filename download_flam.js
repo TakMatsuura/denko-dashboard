@@ -7,6 +7,17 @@ const FLAM_ID = process.env.FLAM_ID;
 const FLAM_PW = process.env.FLAM_PW;
 const DATA_DIR = '/tmp/flam_data';
 
+// 現在の会計年度開始日 (FY は 5月始まり)
+// 例: 2026-05-03 実行時 → '2026/05/01' (FY26)
+//     2026-04-30 実行時 → '2025/05/01' (FY25)
+function getFYStartDate() {
+  const now = new Date();
+  const fyYear = now.getMonth() + 1 >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${fyYear}/05/01`;
+}
+const FY_START_DATE = getFYStartDate();
+console.log(`📅 取得期間: ${FY_START_DATE} 以降 (現FY: ${FY_START_DATE.slice(0, 4)}年5月始まり)`);
+
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
@@ -47,8 +58,11 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
   await page.waitForURL('**/', { timeout: 30000 });
   console.log('Logged in');
 
-  const S = '2025%2F05%2F01';
-  const E = '2026%2F04%2F30';
+  // FY 期間 (5月始まり) を URL エンコード形式で
+  const fyYear = parseInt(FY_START_DATE.slice(0, 4));
+  const S = encodeURIComponent(`${fyYear}/05/01`);
+  const E = encodeURIComponent(`${fyYear + 1}/04/30`);
+  console.log(`  期間 (URL encoded): S=${S} / E=${E}`);
 
   console.log('=== Step 2: Download CSVs ===');
 
@@ -106,7 +120,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       const form = document.querySelector('form');
       const formDataObj = new FormData(form);
       // Set start date
-      formDataObj.set('sd', '2025/05/01');
+      formDataObj.set('sd', FY_START_DATE);
       // Set file format to CSV
       formDataObj.set('file-format', 'csv');
       formDataObj.set('format', 'csv');
@@ -182,7 +196,7 @@ async function downloadCSV(context, page, searchUrl, exportUrl, filename) {
       const form = document.querySelector('form');
       const formDataObj = new FormData(form);
       // Set start date
-      formDataObj.set('sd', '2025/05/01');
+      formDataObj.set('sd', FY_START_DATE);
       // Set file format to CSV
       formDataObj.set('file-format', 'csv');
       formDataObj.set('format', 'csv');
