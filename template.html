@@ -1148,8 +1148,17 @@ async function renderCustomerAnalysis() {
   _customerAnalysisRendered = true;
   if (status) status.textContent = `読込完了 (${fyList.length}FY)`;
 
-  // FY セレクタ初期化
-  const fyOpts = fyList.slice().reverse().map(y => `<option value="${y}">FY${y}</option>`).join('');
+  // FY セレクタ初期化: 「データがある最新FY」 をデフォルト selected に
+  // (現FY=2026 はまだ始まったばかりでデータ薄いため、 FY2025 が default になる)
+  const fyWithData = fyList.filter(fy => {
+    const data = _customerData[fy] || {};
+    return Object.values(data).some(v => v.sales > 0);
+  });
+  const defaultFy = fyWithData.length > 0 ? fyWithData[fyWithData.length - 1] : FY_YEAR;
+  const fyOpts = fyList.slice().reverse().map(y => {
+    const sel = y === defaultFy ? ' selected' : '';
+    return `<option value="${y}"${sel}>FY${y}</option>`;
+  }).join('');
   ['customer-top20-fy', 'customer-pareto-fy', 'customer-matrix-fy', 'customer-margin-fy'].forEach(id => {
     const sel = document.getElementById(id);
     if (sel) sel.innerHTML = fyOpts;
@@ -1404,7 +1413,16 @@ async function renderSupplierAnalysis() {
   _supplierAnalysisRendered = true;
   if (status) status.textContent = `読込完了 (${fyList.length}FY)`;
 
-  const fyOpts = fyList.slice().reverse().map(y => `<option value="${y}">FY${y}</option>`).join('');
+  // データがある最新FY を default selected
+  const fyWithData = fyList.filter(fy => {
+    const data = _supplierData[fy] || {};
+    return Object.values(data).some(v => v.purchase > 0);
+  });
+  const defaultFy = fyWithData.length > 0 ? fyWithData[fyWithData.length - 1] : FY_YEAR;
+  const fyOpts = fyList.slice().reverse().map(y => {
+    const sel = y === defaultFy ? ' selected' : '';
+    return `<option value="${y}"${sel}>FY${y}</option>`;
+  }).join('');
   ['supplier-top20-fy', 'supplier-pareto-fy'].forEach(id => {
     const sel = document.getElementById(id);
     if (sel) sel.innerHTML = fyOpts;
