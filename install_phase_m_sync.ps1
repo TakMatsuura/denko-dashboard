@@ -1,5 +1,5 @@
 ﻿# Phase M データ同期 自動起動セットアップ
-# 1日2回 (09:00 / 17:00) sync_phase_m_data.bat を実行するタスクを登録
+# 1日2回 (08:00 / 22:00) sync_phase_m_data.bat を実行するタスクを登録
 #
 # 使い方: PowerShell を 管理者として実行 → このスクリプトを実行
 # 解除: uninstall_phase_m_sync.ps1 を実行
@@ -15,7 +15,7 @@ Write-Host "  Phase M データ同期 自動起動セットアップ" -Foregroun
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "対象スクリプト: $batPath"
-Write-Host "実行スケジュール: 毎日 09:00 と 17:00"
+Write-Host "実行スケジュール: 毎日 08:00 と 22:00"
 Write-Host ""
 
 if (-not (Test-Path $batPath)) {
@@ -30,9 +30,9 @@ if ($existing) {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
-# トリガー: 毎日 09:00 と 17:00
-$trigger1 = New-ScheduledTaskTrigger -Daily -At '09:00'
-$trigger2 = New-ScheduledTaskTrigger -Daily -At '17:00'
+# トリガー: 毎日 08:00 と 22:00
+$trigger1 = New-ScheduledTaskTrigger -Daily -At '08:00'
+$trigger2 = New-ScheduledTaskTrigger -Daily -At '22:00'
 
 # アクション: バッチ実行
 $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$batPath`"" -WorkingDirectory $root
@@ -58,7 +58,7 @@ Register-ScheduledTask `
 
 Write-Host ""
 Write-Host "✅ タスク登録完了: $taskName" -ForegroundColor Green
-Write-Host "   毎日 09:00 と 17:00 に自動実行されます" -ForegroundColor Green
+Write-Host "   毎日 08:00 と 22:00 に自動実行されます" -ForegroundColor Green
 Write-Host ""
 Write-Host "手動で今すぐ実行: " -NoNewline
 Write-Host ".\sync_phase_m_data.bat" -ForegroundColor Yellow

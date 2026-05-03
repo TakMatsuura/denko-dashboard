@@ -1065,11 +1065,11 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
     }
   });
 
-  // Profit chart
+  // Profit chart (電力系部門ベース・deptSales 使用 / saleTotal は不完全のため使わない)
   const monthlyMap = {};
-  saleTotal.forEach(r => {
-    if (r['商品コード'] === '9999') return;
+  denkiData.forEach(r => {
     const m = r['集計年月'];
+    if (!m) return;  // 防御: 集計年月が空ならスキップ
     if (!monthlyMap[m]) monthlyMap[m] = { profit: 0 };
     monthlyMap[m].profit += toNum(r['粗利益']);
   });
