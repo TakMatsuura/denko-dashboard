@@ -315,6 +315,7 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('customers',this)">Customers</div>
     <div class="nav-tab" onclick="showTab('orders',this)">Orders</div>
     <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
+    <div class="nav-tab" onclick="showTab('multi-year',this)">Multi-Year</div>
     <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
   <div class="nav-right" style="display:flex;gap:12px;align-items:center;">
@@ -520,6 +521,56 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
 </div>
 
+<!-- MULTI-YEAR (Phase N: 多年度分析ダッシュボード) -->
+<div id="multi-year" class="section">
+  <div class="page-header"><h2>Multi-Year Analysis</h2><div class="subtitle" id="multi-year-subtitle">FY2020〜FY2026 の年次比較・長期トレンド分析</div></div>
+  <div class="content">
+    <!-- N-1: 年度比較サマリー -->
+    <div class="card full" style="margin-bottom:16px">
+      <div class="card-header"><h3>📊 年度比較サマリー (FY別)</h3>
+        <div class="badge" id="multi-year-loading-status">読込中...</div>
+      </div>
+      <div class="card-body" style="overflow-x:auto">
+        <table id="multi-year-summary-table" style="min-width:900px">
+          <thead>
+            <tr>
+              <th>FY</th>
+              <th class="text-right">期間</th>
+              <th class="text-right">年間売上</th>
+              <th class="text-right">粗利益</th>
+              <th class="text-right">粗利率</th>
+              <th class="text-right">仕入</th>
+              <th class="text-right">明細件数</th>
+              <th class="text-right">YoY売上</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- N-1.5: 売上推移 (年並列棒グラフ) -->
+    <div class="card full" style="margin-bottom:16px">
+      <div class="card-header"><h3>📈 年度売上推移 (棒グラフ)</h3></div>
+      <div class="card-body" style="height:350px"><canvas id="chart-multi-year-sales"></canvas></div>
+    </div>
+
+    <!-- N-4: 長期月次トレンド -->
+    <div class="card full" style="margin-bottom:16px">
+      <div class="card-header"><h3>⏱️ 長期月次トレンド (FY20〜FY26 全期間連結)</h3></div>
+      <div class="card-body" style="height:350px"><canvas id="chart-multi-year-monthly"></canvas></div>
+    </div>
+
+    <!-- N-3: YoY 成長率ヒートマップ -->
+    <div class="card full" style="margin-bottom:16px">
+      <div class="card-header"><h3>🔥 月別 売上ヒートマップ (FY × 月)</h3></div>
+      <div class="card-body" style="overflow-x:auto">
+        <table id="multi-year-heatmap" style="min-width:800px"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MASTER (Phase 0.3-5: マスタ履歴ダッシュボード) -->
 <div id="master" class="section">
   <div class="page-header"><h2>Master Data History</h2><div class="subtitle">FLAMマスタの日次変更履歴 (件数推移・新規追加・廃番化・単価変更)</div></div>
@@ -603,7 +654,7 @@ budget: `
 
 <script>
 const MASTER_SUMMARY = {
-  "generated_at": "2026-05-03T05:11:49.390Z",
+  "generated_at": "2026-05-03T05:23:11.431Z",
   "today": "2026-05-03",
   "labels": {
     "customers": "得意先マスタ",
@@ -774,6 +825,193 @@ function showTab(id, el) {
   if (id === 'master') {
     try { renderMaster(); } catch (e) { console.error('renderMaster failed:', e); }
   }
+  // ★Phase N: Multi-Year タブ初期描画
+  if (id === 'multi-year') {
+    try { renderMultiYear(); } catch (e) { console.error('renderMultiYear failed:', e); }
+  }
+}
+
+// ★Phase N: 多年度分析ダッシュボード描画
+let _multiYearLoaded = false;
+let _multiYearData = {};   // { 2020: { sales, profit, cost, monthly:{...} }, 2021: ... }
+
+async function renderMultiYear() {
+  if (_multiYearLoaded) return;  // 一度ロードしたら再ロードしない
+  const statusEl = document.getElementById('multi-year-loading-status');
+  if (statusEl) statusEl.textContent = '全FY データ読込中...';
+
+  // 過去FY (FY2020〜) を全て fetch
+  // 現FY は CSV_DATA から (既にロード済)
+  const fyList = [];
+  for (let y = 2020; y <= FY_YEAR; y++) fyList.push(y);
+
+  const DENKI_DEPTS_LOCAL = ['DNK-E', 'DNK-E-N', 'DNK-E-S'];
+
+  for (const fy of fyList) {
+    let deptSalesText = '';
+    let purchaseText = '';
+    if (fy === FY_YEAR && typeof CSV_DATA !== 'undefined') {
+      // 現FY は埋め込み済データを使用
+      deptSalesText = CSV_DATA.dept_sales || '';
+      purchaseText = CSV_DATA.dept_purchase || '';
+    } else {
+      // 過去FY は public/data/fy/ から fetch
+      try {
+        const [s, p] = await Promise.all([
+          fetch(`data/fy/${fy}/dept_sales.csv`).then(r => r.ok ? r.text() : ''),
+          fetch(`data/fy/${fy}/dept_purchase.csv`).then(r => r.ok ? r.text() : ''),
+        ]);
+        deptSalesText = s; purchaseText = p;
+      } catch (e) {
+        console.warn(`FY${fy} fetch failed:`, e);
+      }
+    }
+    const deptSales = parseCSV(deptSalesText);
+    const purchase = parseCSV(purchaseText);
+    const denkiSales = deptSales.filter(r => DENKI_DEPTS_LOCAL.includes(r['部門コード']));
+    const denkiPurchase = purchase.filter(r => DENKI_DEPTS_LOCAL.includes(r['部門コード']));
+
+    const totalSales = denkiSales.reduce((s, r) => s + toNum(r['純売上額']), 0);
+    const totalProfit = denkiSales.reduce((s, r) => s + toNum(r['粗利益']), 0);
+    const totalCost = denkiSales.reduce((s, r) => s + toNum(r['原価計']), 0);
+    const totalCount = denkiSales.reduce((s, r) => s + toNum(r['明細数']), 0);
+    const totalPurchase = denkiPurchase.reduce((s, r) => s + toNum(r['純仕入額']), 0);
+    const profitRate = totalSales > 0 ? (totalProfit / totalSales * 100) : 0;
+
+    // 月別集計
+    const monthly = {};
+    denkiSales.forEach(r => {
+      const m = r['集計年月'];
+      if (!m) return;
+      if (!monthly[m]) monthly[m] = { sales: 0, profit: 0 };
+      monthly[m].sales += toNum(r['純売上額']);
+      monthly[m].profit += toNum(r['粗利益']);
+    });
+
+    _multiYearData[fy] = { totalSales, totalProfit, totalCost, totalCount, totalPurchase, profitRate, monthly };
+  }
+
+  _multiYearLoaded = true;
+  if (statusEl) statusEl.textContent = `読込完了 (${fyList.length}FY)`;
+
+  drawMultiYearSummaryTable();
+  drawMultiYearSalesChart();
+  drawMultiYearMonthlyChart();
+  drawMultiYearHeatmap();
+}
+
+// N-1 + N-3 (YoY): 年度比較サマリーテーブル
+function drawMultiYearSummaryTable() {
+  const tbody = document.querySelector('#multi-year-summary-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const fys = Object.keys(_multiYearData).map(Number).sort();
+  fys.forEach((fy, i) => {
+    const d = _multiYearData[fy];
+    const prevFy = fys[i - 1];
+    const prevSales = prevFy ? _multiYearData[prevFy].totalSales : 0;
+    const yoy = prevSales > 0 ? ((d.totalSales - prevSales) / prevSales * 100) : null;
+    const yoyClass = yoy === null ? '' : yoy >= 0 ? 'text-green' : 'text-red';
+    const yoyText = yoy === null ? '-' : (yoy >= 0 ? '+' : '') + yoy.toFixed(1) + '%';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>FY${fy}</strong></td>
+      <td class="text-right" style="font-size:0.85em;color:#666;">${fy}/05〜${fy + 1}/04</td>
+      <td class="text-right">${fmtOku(d.totalSales)}</td>
+      <td class="text-right">${fmtOku(d.totalProfit)}</td>
+      <td class="text-right">${d.profitRate.toFixed(1)}%</td>
+      <td class="text-right">${fmtOku(d.totalPurchase)}</td>
+      <td class="text-right">${fmt(d.totalCount)}</td>
+      <td class="text-right ${yoyClass}"><strong>${yoyText}</strong></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// N-1.5: 年度別売上棒グラフ
+let _multiYearSalesChart = null;
+function drawMultiYearSalesChart() {
+  const ctx = document.getElementById('chart-multi-year-sales');
+  if (!ctx) return;
+  if (_multiYearSalesChart) _multiYearSalesChart.destroy();
+  const fys = Object.keys(_multiYearData).map(Number).sort();
+  _multiYearSalesChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: fys.map(y => `FY${y}`),
+      datasets: [
+        { label: '売上', data: fys.map(y => _multiYearData[y].totalSales), backgroundColor: '#0070d2cc', barPercentage: 0.6 },
+        { label: '粗利', data: fys.map(y => _multiYearData[y].totalProfit), backgroundColor: '#3ba755cc', barPercentage: 0.6 },
+        { label: '仕入', data: fys.map(y => _multiYearData[y].totalPurchase), backgroundColor: '#fe9339cc', barPercentage: 0.6 },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+  });
+}
+
+// N-4: 長期月次トレンド (FY20〜FY26 全連結)
+let _multiYearMonthlyChart = null;
+function drawMultiYearMonthlyChart() {
+  const ctx = document.getElementById('chart-multi-year-monthly');
+  if (!ctx) return;
+  if (_multiYearMonthlyChart) _multiYearMonthlyChart.destroy();
+  // 全月を時系列順に並べる
+  const allMonths = new Set();
+  Object.values(_multiYearData).forEach(d => Object.keys(d.monthly).forEach(m => allMonths.add(m)));
+  const sortedMonths = [...allMonths].sort();
+  const salesData = sortedMonths.map(m => {
+    for (const d of Object.values(_multiYearData)) if (d.monthly[m]) return d.monthly[m].sales;
+    return 0;
+  });
+  const profitData = sortedMonths.map(m => {
+    for (const d of Object.values(_multiYearData)) if (d.monthly[m]) return d.monthly[m].profit;
+    return 0;
+  });
+  _multiYearMonthlyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: sortedMonths.map(monthLabel),
+      datasets: [
+        { label: '売上 (月次)', data: salesData, borderColor: '#0070d2', backgroundColor: '#0070d220', tension: 0.2, fill: false, pointRadius: 0 },
+        { label: '粗利 (月次)', data: profitData, borderColor: '#3ba755', backgroundColor: '#3ba75520', tension: 0.2, fill: false, pointRadius: 0 },
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => fmtOku(v) } } } }
+  });
+}
+
+// N-3: 月別ヒートマップ (FY × 月)
+function drawMultiYearHeatmap() {
+  const tbl = document.getElementById('multi-year-heatmap');
+  if (!tbl) return;
+  const fys = Object.keys(_multiYearData).map(Number).sort();
+  const fyMonths = ['05', '06', '07', '08', '09', '10', '11', '12', '01', '02', '03', '04'];
+  // 全月最大値で色スケール正規化
+  let maxSales = 0;
+  Object.values(_multiYearData).forEach(d => Object.values(d.monthly).forEach(v => { if (v.sales > maxSales) maxSales = v.sales; }));
+
+  let html = '<thead><tr><th>FY</th>';
+  fyMonths.forEach(m => html += `<th class="text-right">${parseInt(m)}月</th>`);
+  html += '<th class="text-right">合計</th></tr></thead><tbody>';
+  fys.forEach(fy => {
+    const d = _multiYearData[fy];
+    html += `<tr><td><strong>FY${fy}</strong></td>`;
+    fyMonths.forEach(m => {
+      const ymKey = (parseInt(m) >= 5) ? `${fy}/${m}` : `${fy + 1}/${m}`;
+      const v = d.monthly[ymKey];
+      if (!v || v.sales === 0) { html += `<td class="text-right" style="color:#ccc">-</td>`; }
+      else {
+        const intensity = maxSales > 0 ? (v.sales / maxSales) : 0;
+        const r = Math.round(255 * (1 - intensity * 0.7));
+        const g = Math.round(255 * (1 - intensity * 0.3));
+        const b = Math.round(255 * (1 - intensity * 0.7));
+        html += `<td class="text-right" style="background:rgb(${r},${g},${b});font-size:0.85em">${(v.sales / 10000).toFixed(0)}万</td>`;
+      }
+    });
+    html += `<td class="text-right"><strong>${fmtOku(d.totalSales)}</strong></td></tr>`;
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
 }
 
 // ★Phase 0.3-5: マスタ履歴ダッシュボード描画
