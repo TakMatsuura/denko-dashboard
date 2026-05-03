@@ -47,18 +47,21 @@ export const onRequest = async ({ request, env }) => {
     }
 
     let entries = [];
+    let dataSourceLabel = 'empty';
     if (runHistoryText) {
       entries = runHistoryText.split('\n')
         .filter(l => l.trim())
         .map(l => { try { return JSON.parse(l); } catch { return null; } })
         .filter(e => e && !e.dry_run);  // dry_run は除外
+      dataSourceLabel = entries.length > 0 ? 'live' : 'empty';
     } else {
       // モックデータ
       entries = generateMockEntries();
+      dataSourceLabel = 'mock';
     }
 
     // 集計
-    const summary = aggregate(entries);
+    const summary = aggregate(entries, dataSourceLabel);
 
     return new Response(JSON.stringify(summary, null, 2), {
       headers: {
@@ -75,7 +78,7 @@ export const onRequest = async ({ request, env }) => {
 };
 
 // =================== 集計ロジック ===================
-function aggregate(entries) {
+function aggregate(entries, dataSourceLabel) {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -156,7 +159,7 @@ function aggregate(entries) {
 
   return {
     generated_at: now.toISOString(),
-    data_source: entries.length > 0 ? (runHistoryText ? 'live' : 'mock') : 'empty',
+    data_source: dataSourceLabel,
     today: todayStatus,
     monthly_trend: monthlyTrend,
     by_eigyo: byEigyo,
