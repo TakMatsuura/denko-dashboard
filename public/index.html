@@ -603,7 +603,7 @@ budget: `
 
 <script>
 const MASTER_SUMMARY = {
-  "generated_at": "2026-05-03T04:17:55.813Z",
+  "generated_at": "2026-05-03T04:37:03.939Z",
   "today": "2026-05-03",
   "labels": {
     "customers": "得意先マスタ",
@@ -703,44 +703,24 @@ const FY_RANGE_LABEL = `${FY_LABEL} (${FY_YEAR}/05/01〜${FY_NEXT}/04/30)`;
 const FY_NEXT_START = `${FY_NEXT}-05-01`;
 const FY_PERFORMANCE_TITLE = `FY${FY_YEAR} Annual Performance Summary`;
 
-// 表示中のFY (年度フィルターで変更可能。デフォルト = 現FY)
-let SELECTED_FY = FY_YEAR;
+// 表示中のFY (URL パラメータ ?fy=YYYY で初期化、なければ現FY)
+const _urlParams = new URLSearchParams(window.location.search);
+const _urlFY = parseInt(_urlParams.get('fy'));
+let SELECTED_FY = !isNaN(_urlFY) ? _urlFY : FY_YEAR;
 
 // 年度切替ハンドラ
+//   現FY:   ?fy パラメータなしでリロード (埋め込み CSV_DATA を使用)
+//   過去FY: ?fy=YYYY でリロード (loadData が public/data/fy/YYYY/*.csv を fetch)
 function onFYChange() {
   const sel = document.getElementById('fy-selector');
   if (!sel) return;
   const newFY = parseInt(sel.value);
   if (isNaN(newFY) || newFY === SELECTED_FY) return;
-  SELECTED_FY = newFY;
-  updateFYLabels();
-  // データ再ロード or 過去FYなら警告表示
   if (newFY === FY_YEAR) {
-    location.reload();  // 現FY: 通常通りリロード
+    location.href = location.pathname;  // 現FY (パラメータクリア)
   } else {
-    showPastFYNotice(newFY);
+    location.href = `${location.pathname}?fy=${newFY}`;
   }
-}
-
-// 過去FY選択時の通知 (データなし)
-function showPastFYNotice(fy) {
-  const banner = document.createElement('div');
-  banner.id = 'past-fy-notice';
-  banner.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#fff3cd;border:2px solid #DAA520;color:#856404;padding:14px 24px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-width:600px;';
-  banner.innerHTML = `⚠️ FY${fy} (${fy}/05 - ${fy+1}/04) のデータは現在保持されていません<br>
-    <span style="font-weight:400;font-size:0.9em;">過去FYデータの取得・閲覧機能は今後の機能追加予定 (WBS タスク化)。<br>
-    現在表示中のデータは <strong>FY${FY_YEAR}</strong> のままです。</span>`;
-  // 既存のバナーがあれば削除
-  const old = document.getElementById('past-fy-notice');
-  if (old) old.remove();
-  document.body.appendChild(banner);
-  // セレクタは元に戻す
-  setTimeout(() => {
-    document.getElementById('fy-selector').value = FY_YEAR;
-    SELECTED_FY = FY_YEAR;
-  }, 100);
-  // 8秒後にバナー消す
-  setTimeout(() => banner.remove(), 8000);
 }
 
 // FY ラベルを SELECTED_FY に応じて動的更新
@@ -1120,7 +1100,45 @@ function progressColor(pct) { return pct >= 100 ? 'green' : pct >= 80 ? 'blue' :
 
 async function loadData() {
   let saleTotalText, purchaseText, stockText, budgetText, customerSalesText, deptSalesText, ordersText, custProductText;
-  if (typeof CSV_DATA !== 'undefined') {
+
+  // 過去FY 選択時は public/data/fy/YYYY/ から fetch
+  if (SELECTED_FY !== FY_YEAR) {
+    const fyPath = `data/fy/${SELECTED_FY}`;
+    try {
+      const fetchOrEmpty = async (file) => {
+        try {
+          const r = await fetch(`${fyPath}/${file}`);
+          if (!r.ok) return '';
+          return await r.text();
+        } catch { return ''; }
+      };
+      [deptSalesText, customerSalesText, saleTotalText, custProductText, purchaseText] = await Promise.all([
+        fetchOrEmpty('dept_sales.csv'),
+        fetchOrEmpty('dept_customer_sales.csv'),
+        fetchOrEmpty('dept_product_sales.csv'),
+        fetchOrEmpty('customer_product_sales.csv'),
+        fetchOrEmpty('dept_purchase.csv'),
+      ]);
+      // 過去FY は受注残・在庫データなし (現FY同期データのみ)
+      ordersText = '';
+      stockText = '';
+      budgetText = '';  // 過去FY 予算は別途
+      window._salesDetailText = '';
+
+      if (!deptSalesText) {
+        // データなし → 警告バナー
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#fff3cd;border:2px solid #DAA520;color:#856404;padding:14px 24px;border-radius:8px;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);max-width:600px;';
+        banner.innerHTML = `⚠️ FY${SELECTED_FY} のデータは未取得です<br>
+          <span style="font-weight:400;font-size:0.9em;">GitHub Actions の "Fetch Past FY Data" workflow を target_fy=${SELECTED_FY} で実行してください。<br>
+          実行URL: <a href="https://github.com/TakMatsuura/denko-dashboard/actions/workflows/fetch-past-fy.yml" target="_blank" style="color:#0070d2;">Actions タブ</a></span>`;
+        document.body.appendChild(banner);
+        setTimeout(() => banner.remove(), 12000);
+      }
+    } catch (e) {
+      console.error('過去FY データ取得失敗:', e);
+    }
+  } else if (typeof CSV_DATA !== 'undefined') {
     saleTotalText = CSV_DATA.dept_product_sales || '';
     purchaseText = CSV_DATA.dept_purchase || '';
     stockText = CSV_DATA.stockrecents || '';
