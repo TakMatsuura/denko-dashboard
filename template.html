@@ -615,16 +615,19 @@ function updateFYLabels() {
   if (summaryEl) summaryEl.textContent = `FY${fy} Annual Performance Summary`;
 }
 
-// FY ドロップダウン候補を生成 (現FY を中心に過去5年・先1年)
+// FY ドロップダウン候補を生成 (現FY を中心に過去9年・先1年)
 function populateFYSelector() {
   const sel = document.getElementById('fy-selector');
   if (!sel) return;
   const candidates = [];
-  for (let y = FY_YEAR - 5; y <= FY_YEAR + 1; y++) candidates.push(y);
+  // 過去FY は実データ確認できた範囲 (FY2020〜) + 余裕で 10年遡る
+  const minYear = Math.min(FY_YEAR - 10, 2020);  // FY2020 以降
+  for (let y = minYear; y <= FY_YEAR + 1; y++) candidates.push(y);
   candidates.reverse();  // 新しい年が上
   sel.innerHTML = candidates.map(y => {
     const label = `FY${y} (${y}/05〜${y + 1}/04)`;
-    const selected = y === FY_YEAR ? ' selected' : '';
+    // ★ 修正: SELECTED_FY (URL ?fy= or デフォルト現FY) を見る
+    const selected = y === SELECTED_FY ? ' selected' : '';
     return `<option value="${y}"${selected}>${label}</option>`;
   }).join('');
 }
