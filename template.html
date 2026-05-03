@@ -2037,6 +2037,24 @@ function buildOverview(saleTotal, purchase, budget, customerSales, deptSales) {
   const profitRate = totalSales !== 0 ? (totalProfit / totalSales * 100).toFixed(1) : 0;
   const achieveRate = (totalSales / BUDGET_ANNUAL * 100).toFixed(1);
 
+  // ★アラート: 部門コード未設定の明細チェック (sales_detail.csv ベース)
+  const salesDetail = parseCSV(window._salesDetailText || '');
+  const blankDeptDetails = salesDetail.filter(r => !r['部門コード'] || r['部門コード'].trim() === '');
+  const blankDeptCount = blankDeptDetails.length;
+  const blankDeptAmount = blankDeptDetails.reduce((s, r) => s + toNum(r['小計'] || r['売上合計']), 0);
+  // 警告バナー (Overview タブの上部に挿入)
+  const existingAlert = document.getElementById('dept-blank-alert');
+  if (existingAlert) existingAlert.remove();
+  if (blankDeptCount > 0) {
+    const alertEl = document.createElement('div');
+    alertEl.id = 'dept-blank-alert';
+    alertEl.style.cssText = 'background:#fff3cd;border-left:4px solid #DAA520;color:#856404;padding:12px 16px;margin:0 16px 12px;border-radius:6px;font-weight:600;';
+    alertEl.innerHTML = `⚠️ <strong>部門コード未設定の売上明細が ${blankDeptCount}件 あります</strong> (合計 ${fmtOku(blankDeptAmount)}) — FLAMで部門設定を確認してください`;
+    const overviewSection = document.getElementById('overview');
+    const pageHeader = overviewSection.querySelector('.page-header');
+    if (pageHeader) pageHeader.insertAdjacentElement('afterend', alertEl);
+  }
+
   // Gauge charts
   drawGauge('gauge-revenue', 'gauge-revenue-center', 'gauge-revenue-footer', 'gauge-revenue-badge', totalSales, BUDGET_ANNUAL, 'Revenue', '億');
   drawGauge('gauge-profit', 'gauge-profit-center', 'gauge-profit-footer', 'gauge-profit-badge', totalProfit, BUDGET_ANNUAL * 0.3, 'Profit', '億');
