@@ -5,18 +5,29 @@ const path = require('path');
 const FLAM_URL = 'https://dnk.flam.bz';
 const FLAM_ID = process.env.FLAM_ID;
 const FLAM_PW = process.env.FLAM_PW;
-const DATA_DIR = '/tmp/flam_data';
 
-// 現在の会計年度開始日 (FY は 5月始まり)
-// 例: 2026-05-03 実行時 → '2026/05/01' (FY26)
-//     2026-04-30 実行時 → '2025/05/01' (FY25)
+// 引数解析: --fy 2024 で過去FYを取得 (省略時は現FY)
+//   現FY:    /tmp/flam_data に保存 (build_html.js が読む)
+//   過去FY:  /tmp/flam_data_fyYYYY に保存 (sync後に public/data/fy/YYYY/ にコピー)
+const argv = process.argv.slice(2);
+let TARGET_FY = null;
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--fy' && argv[i + 1]) TARGET_FY = parseInt(argv[i + 1]);
+}
+
+const DATA_DIR = TARGET_FY ? `/tmp/flam_data_fy${TARGET_FY}` : '/tmp/flam_data';
+
+// 会計年度開始日 (5月始まり)
 function getFYStartDate() {
+  if (TARGET_FY) return `${TARGET_FY}/05/01`;
   const now = new Date();
   const fyYear = now.getMonth() + 1 >= 5 ? now.getFullYear() : now.getFullYear() - 1;
   return `${fyYear}/05/01`;
 }
 const FY_START_DATE = getFYStartDate();
-console.log(`📅 取得期間: ${FY_START_DATE} 以降 (現FY: ${FY_START_DATE.slice(0, 4)}年5月始まり)`);
+const FY_LABEL = TARGET_FY ? `FY${TARGET_FY} (過去FY指定)` : `FY${FY_START_DATE.slice(0, 4)} (現FY)`;
+console.log(`📅 取得対象: ${FY_LABEL} / 期間: ${FY_START_DATE} 以降`);
+console.log(`📁 保存先: ${DATA_DIR}`);
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
