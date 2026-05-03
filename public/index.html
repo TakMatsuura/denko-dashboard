@@ -319,8 +319,17 @@ if (sessionStorage.getItem('denko-auth') === '1') {
     <div class="nav-tab" onclick="showTab('master',this)">Master</div>
   </div>
   <div class="nav-right" style="display:flex;gap:12px;align-items:center;">
+    <!-- 通常FYセレクタ (Overview/Customers/Orders/Purchasing/Master タブ用) -->
     <select id="fy-selector" onchange="onFYChange()" style="padding:4px 10px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;cursor:pointer;background:#fff;color:#333;">
       <!-- FY 候補は JS で動的生成 -->
+    </select>
+    <!-- 期間セレクタ (Multi-Year タブ専用・初期非表示) -->
+    <select id="period-selector" onchange="onPeriodChange()" style="display:none;padding:4px 10px;border-radius:4px;border:1px solid #ccc;font-size:0.85rem;cursor:pointer;background:#fff;color:#333;">
+      <option value="3">直近3年</option>
+      <option value="5" selected>直近5年</option>
+      <option value="7">直近7年</option>
+      <option value="10">直近10年</option>
+      <option value="all">全期間</option>
     </select>
     <span id="fy-header-label">FY2025 (2025/05 - 2026/04)</span>
   </div>
@@ -654,7 +663,7 @@ budget: `
 
 <script>
 const MASTER_SUMMARY = {
-  "generated_at": "2026-05-03T05:35:21.159Z",
+  "generated_at": "2026-05-03T06:06:18.650Z",
   "today": "2026-05-03",
   "labels": {
     "customers": "得意先マスタ",
@@ -825,10 +834,39 @@ function showTab(id, el) {
   if (id === 'master') {
     try { renderMaster(); } catch (e) { console.error('renderMaster failed:', e); }
   }
-  // ★Phase N: Multi-Year タブ初期描画
+  // ★Phase N: Multi-Year タブ → 期間セレクタに切替
+  const fySel = document.getElementById('fy-selector');
+  const periodSel = document.getElementById('period-selector');
+  const fyLabel = document.getElementById('fy-header-label');
   if (id === 'multi-year') {
+    if (fySel) fySel.style.display = 'none';
+    if (periodSel) periodSel.style.display = '';
+    if (fyLabel) fyLabel.textContent = ''; // 期間選択中はラベル非表示
     try { renderMultiYear(); } catch (e) { console.error('renderMultiYear failed:', e); }
+  } else {
+    if (fySel) fySel.style.display = '';
+    if (periodSel) periodSel.style.display = 'none';
+    if (fyLabel) updateFYLabels();  // 通常FYラベルに戻す
   }
+}
+
+// 期間変更ハンドラ (Multi-Year タブ用)
+function onPeriodChange() {
+  if (!_multiYearLoaded) return;
+  drawMultiYearSummaryTable();
+  drawMultiYearSalesChart();
+  drawMultiYearMonthlyChart();
+  drawMultiYearHeatmap();
+}
+
+// 期間で絞り込んだFYリストを返す
+function getFilteredFYs() {
+  const sel = document.getElementById('period-selector');
+  const period = sel ? sel.value : '5';
+  const fys = Object.keys(_multiYearData).map(Number).sort();
+  if (period === 'all') return fys;
+  const n = parseInt(period);
+  return fys.slice(-n);  // 直近 N 年
 }
 
 // ★Phase N: 多年度分析ダッシュボード描画
@@ -905,7 +943,7 @@ function drawMultiYearSummaryTable() {
   const tbody = document.querySelector('#multi-year-summary-table tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  const fys = Object.keys(_multiYearData).map(Number).sort();
+  const fys = getFilteredFYs();
   fys.forEach((fy, i) => {
     const d = _multiYearData[fy];
     const prevFy = fys[i - 1];
@@ -934,7 +972,7 @@ function drawMultiYearSalesChart() {
   const ctx = document.getElementById('chart-multi-year-sales');
   if (!ctx) return;
   if (_multiYearSalesChart) _multiYearSalesChart.destroy();
-  const fys = Object.keys(_multiYearData).map(Number).sort();
+  const fys = getFilteredFYs();
   _multiYearSalesChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -955,16 +993,25 @@ function drawMultiYearMonthlyChart() {
   const ctx = document.getElementById('chart-multi-year-monthly');
   if (!ctx) return;
   if (_multiYearMonthlyChart) _multiYearMonthlyChart.destroy();
-  // 全月を時系列順に並べる
+  const filteredFYs = new Set(getFilteredFYs());
+  // 全月を時系列順に並べる (フィルタ対象FYのみ)
   const allMonths = new Set();
-  Object.values(_multiYearData).forEach(d => Object.keys(d.monthly).forEach(m => allMonths.add(m)));
+  filteredFYs.forEach(fy => {
+    if (_multiYearData[fy]) Object.keys(_multiYearData[fy].monthly).forEach(m => allMonths.add(m));
+  });
   const sortedMonths = [...allMonths].sort();
   const salesData = sortedMonths.map(m => {
-    for (const d of Object.values(_multiYearData)) if (d.monthly[m]) return d.monthly[m].sales;
+    for (const fy of filteredFYs) {
+      const d = _multiYearData[fy];
+      if (d && d.monthly[m]) return d.monthly[m].sales;
+    }
     return 0;
   });
   const profitData = sortedMonths.map(m => {
-    for (const d of Object.values(_multiYearData)) if (d.monthly[m]) return d.monthly[m].profit;
+    for (const fy of filteredFYs) {
+      const d = _multiYearData[fy];
+      if (d && d.monthly[m]) return d.monthly[m].profit;
+    }
     return 0;
   });
   _multiYearMonthlyChart = new Chart(ctx, {
@@ -984,7 +1031,7 @@ function drawMultiYearMonthlyChart() {
 function drawMultiYearHeatmap() {
   const tbl = document.getElementById('multi-year-heatmap');
   if (!tbl) return;
-  const fys = Object.keys(_multiYearData).map(Number).sort();
+  const fys = getFilteredFYs();
   const fyMonths = ['05', '06', '07', '08', '09', '10', '11', '12', '01', '02', '03', '04'];
   // 全月最大値で色スケール正規化
   let maxSales = 0;
