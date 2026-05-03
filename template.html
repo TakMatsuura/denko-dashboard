@@ -310,14 +310,14 @@ if (sessionStorage.getItem('denko-auth') === '1') {
   </div>
   <div class="menu-toggle" onclick="document.querySelector('.nav-tabs').classList.toggle('open')">&#9776;</div>
   <div class="nav-tabs">
-    <div class="nav-tab active" onclick="showTab('overview',this)">Overview</div>
-    <div class="nav-tab" onclick="showTab('budget',this)">Budget</div>
-    <div class="nav-tab" onclick="showTab('customers',this)">Customers</div>
-    <div class="nav-tab" onclick="showTab('orders',this)">Orders</div>
-    <div class="nav-tab" onclick="showTab('purchase',this)">Purchasing</div>
-    <div class="nav-tab" onclick="showTab('multi-year',this)">Multi-Year</div>
+    <div class="nav-tab active" onclick="showTab('overview',this)">📈 Overview</div>
+    <div class="nav-tab" onclick="showTab('budget',this)">💰 Budget</div>
+    <div class="nav-tab" onclick="showTab('customers',this)">👥 Customers</div>
+    <div class="nav-tab" onclick="showTab('orders',this)">📦 Orders</div>
+    <div class="nav-tab" onclick="showTab('purchase',this)">🛒 Purchasing</div>
+    <div class="nav-tab" onclick="showTab('multi-year',this)">📅 Multi-Year</div>
     <div class="nav-tab" onclick="showTab('biz-analysis',this)">📊 経営分析</div>
-    <div class="nav-tab" onclick="showTab('master',this)">Master</div>
+    <div class="nav-tab" onclick="showTab('master',this)">🗂️ Master</div>
   </div>
   <div class="nav-right" style="display:flex;gap:12px;align-items:center;">
     <!-- 通常FYセレクタ (Overview/Customers/Orders/Purchasing/Master タブ用) -->
@@ -923,6 +923,7 @@ function showTab(id, el) {
     try { renderBizAnalysis(); } catch (e) { console.error('renderBizAnalysis failed:', e); }
   }
   // ★Phase N: Multi-Year タブ → 期間セレクタに切替
+  // ★Phase O: 経営分析タブ → セレクタ・ラベルすべて非表示 (過去5年固定)
   const fySel = document.getElementById('fy-selector');
   const periodSel = document.getElementById('period-selector');
   const fyLabel = document.getElementById('fy-header-label');
@@ -931,6 +932,10 @@ function showTab(id, el) {
     if (periodSel) periodSel.style.display = '';
     if (fyLabel) fyLabel.textContent = ''; // 期間選択中はラベル非表示
     try { renderMultiYear(); } catch (e) { console.error('renderMultiYear failed:', e); }
+  } else if (id === 'biz-analysis') {
+    if (fySel) fySel.style.display = 'none';
+    if (periodSel) periodSel.style.display = 'none';
+    if (fyLabel) fyLabel.textContent = ''; // 経営分析は過去5年固定なのでラベル不要
   } else {
     if (fySel) fySel.style.display = '';
     if (periodSel) periodSel.style.display = 'none';
@@ -2891,13 +2896,9 @@ async function renderBizAnalysis() {
     // メタ情報
     const genDate = new Date(j.generated_at);
     const genStr = genDate.toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const cost = j.cost_usd ? `約${Math.round(j.cost_usd * 150)}円` : '不明';
     document.getElementById('biz-meta').innerHTML = `
-      🤖 <strong>${j.model || 'Claude Opus 4.7'}</strong> による分析 /
-      生成日時: <strong>${genStr}</strong> /
-      対象FY: <strong>${(j.target_fys || []).join(', ')}</strong> /
-      生成コスト: <strong>${cost}</strong> /
-      所要時間: <strong>${j.elapsed_sec ? j.elapsed_sec.toFixed(0) + '秒' : 'N/A'}</strong>
+      📅 生成日時: <strong>${genStr}</strong> &nbsp;/&nbsp;
+      対象FY: <strong>${(j.target_fys || []).join(', ')}</strong>
     `;
 
     // エグゼクティブサマリ
