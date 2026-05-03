@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLAM運用ダッシュボード — Phase M</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7"></script>
+<style>
+  :root {
+    --c-bg: #f3f3f3;
+    --c-card: #fff;
+    --c-primary: #0070d2;
+    --c-success: #4bca81;
+    --c-warning: #ffb75d;
+    --c-error: #c23934;
+    --c-text: #16325c;
+    --c-text-sub: #54698d;
+    --c-border: #dddbda;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Meiryo UI', 'Segoe UI', sans-serif; background: var(--c-bg); color: var(--c-text); padding: 16px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--c-primary); }
+  h1 { font-size: 24px; font-weight: 700; }
+  .meta { font-size: 12px; color: var(--c-text-sub); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--c-card); border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h2 { font-size: 14px; font-weight: 700; color: var(--c-text-sub); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px; }
+  .stat-row { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 12px; }
+  .stat { text-align: center; }
+  .stat .num { font-size: 32px; font-weight: 700; }
+  .stat.success .num { color: var(--c-success); }
+  .stat.warning .num { color: var(--c-warning); }
+  .stat.error .num { color: var(--c-error); }
+  .stat .label { font-size: 12px; color: var(--c-text-sub); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--c-border); }
+  th { background: #f6f9fb; font-weight: 600; color: var(--c-text-sub); font-size: 11px; text-transform: uppercase; }
+  .alert { padding: 10px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 13px; }
+  .alert.high { background: #ffe4e1; color: var(--c-error); border-left: 4px solid var(--c-error); }
+  .alert.medium { background: #fff8dc; color: #b8800f; border-left: 4px solid var(--c-warning); }
+  .alert.info { background: #e3f4ff; color: var(--c-primary); border-left: 4px solid var(--c-primary); }
+  .full-row { grid-column: 1 / -1; }
+  .countdown { font-size: 18px; font-weight: 700; color: var(--c-error); }
+  .data-source { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+  .data-source.mock { background: #fff3cd; color: #856404; }
+  .data-source.live { background: #d4edda; color: #155724; }
+  .data-source.empty { background: #f8d7da; color: #721c24; }
+  .refresh-info { font-size: 11px; color: var(--c-text-sub); }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 FLAM運用ダッシュボード — Phase M</h1>
+    <div class="meta">アクセス: 松浦・桑田・久百々 限定 / 自動更新: 1分ごと</div>
+  </div>
+  <div style="text-align: right;">
+    <span id="data-source" class="data-source">読込中...</span>
+    <div class="refresh-info" id="last-updated">-</div>
+  </div>
+</header>
+
+<div id="alerts-container" style="margin-bottom: 16px;"></div>
+
+<div class="grid">
+
+  <!-- 1. 今日の状況 -->
+  <div class="card">
+    <h2>📅 今日の状況</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="today-processed">-</div><div class="label">処理</div></div>
+      <div class="stat success"><div class="num" id="today-success">-</div><div class="label">成功</div></div>
+      <div class="stat warning"><div class="num" id="today-warning">-</div><div class="label">警告</div></div>
+      <div class="stat error"><div class="num" id="today-failed">-</div><div class="label">失敗</div></div>
+    </div>
+  </div>
+
+  <!-- 5. Phase B -->
+  <div class="card">
+    <h2>💡 Phase B 過去実績ベース価格 利用状況</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="phaseb-count">-</div><div class="label">今月利用件数</div></div>
+      <div class="stat"><div class="num countdown" id="phaseb-days">-</div><div class="label">撤去まで残り (2026-07-01)</div></div>
+    </div>
+    <div style="margin-top: 12px; font-size: 12px; color: var(--c-text-sub);">
+      対象顧客: <span id="phaseb-customers">-</span>
+    </div>
+  </div>
+
+  <!-- 6. 商品マスタ自動登録 -->
+  <div class="card">
+    <h2>📝 商品マスタ自動登録</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="master-count">-</div><div class="label">今月件数</div></div>
+    </div>
+  </div>
+
+  <!-- 7. コスト -->
+  <div class="card">
+    <h2>💰 利用プロバイダ・コスト</h2>
+    <div class="stat-row">
+      <div class="stat success"><div class="num" id="cost-gemini">-</div><div class="label">Gemini (無料)</div></div>
+      <div class="stat warning"><div class="num" id="cost-anthropic">-</div><div class="label">Anthropic (有料)</div></div>
+    </div>
+    <div style="margin-top: 12px; text-align: center; font-size: 13px;">
+      今月の Anthropic コスト概算: <strong>$<span id="cost-usd">-</span></strong>
+    </div>
+  </div>
+
+  <!-- 2. 月間トレンド (full row) -->
+  <div class="card full-row">
+    <h2>📈 月間トレンド (直近30日)</h2>
+    <canvas id="trend-chart" height="80"></canvas>
+  </div>
+
+  <!-- 3. 営業別 (full row) -->
+  <div class="card full-row">
+    <h2>👥 営業別 (今月)</h2>
+    <table id="eigyo-table">
+      <thead>
+        <tr><th>営業</th><th>処理件数</th><th>成功率</th><th>最終アクション</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- 4. エラー分析 -->
+  <div class="card">
+    <h2>🛠️ エラー段階別 (今月)</h2>
+    <canvas id="error-chart" height="120"></canvas>
+  </div>
+
+</div>
+
+<footer style="margin-top: 24px; text-align: center; font-size: 11px; color: var(--c-text-sub);">
+  Phase M ダッシュボード ver0.1 / DENKO 電力機器事業部 / 2026-05-03
+</footer>
+
+<script>
+let trendChart = null;
+let errorChart = null;
+
+async function loadData() {
+  try {
+    const r = await fetch('/api/phase-m/data');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    renderData(data);
+  } catch (e) {
+    console.error('load failed:', e);
+    document.getElementById('data-source').textContent = 'エラー';
+    document.getElementById('data-source').className = 'data-source empty';
+  }
+}
+
+function renderData(d) {
+  // データソース表示
+  const ds = document.getElementById('data-source');
+  ds.textContent = d.data_source === 'live' ? '本番データ' : (d.data_source === 'mock' ? 'モックデータ' : '空');
+  ds.className = 'data-source ' + d.data_source;
+  document.getElementById('last-updated').textContent = '更新: ' + new Date(d.generated_at).toLocaleString('ja-JP');
+
+  // アラート
+  const alertsEl = document.getElementById('alerts-container');
+  alertsEl.innerHTML = '';
+  if (d.alerts && d.alerts.length) {
+    d.alerts.forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'alert ' + a.level;
+      div.textContent = `🚨 ${a.message}`;
+      alertsEl.appendChild(div);
+    });
+  } else {
+    alertsEl.innerHTML = '<div class="alert info">✅ 異常検知アラートなし — 順調に稼働中</div>';
+  }
+
+  // 今日
+  document.getElementById('today-processed').textContent = d.today.processed;
+  document.getElementById('today-success').textContent = d.today.success;
+  document.getElementById('today-warning').textContent = d.today.warning;
+  document.getElementById('today-failed').textContent = d.today.failed;
+
+  // Phase B
+  document.getElementById('phaseb-count').textContent = d.phase_b.count;
+  document.getElementById('phaseb-days').textContent = d.phase_b.days_until_removal + '日';
+  document.getElementById('phaseb-customers').textContent = d.phase_b.customers.join(', ') || '(なし)';
+
+  // マスタ自動登録
+  document.getElementById('master-count').textContent = d.master_register.count;
+
+  // コスト
+  document.getElementById('cost-gemini').textContent = d.cost.gemini_count;
+  document.getElementById('cost-anthropic').textContent = d.cost.anthropic_count;
+  document.getElementById('cost-usd').textContent = d.cost.monthly_usd_estimate;
+
+  // 月間トレンド
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById('trend-chart'), {
+    type: 'line',
+    data: {
+      labels: d.monthly_trend.map(t => t.date.slice(5)),
+      datasets: [
+        { label: '成功', data: d.monthly_trend.map(t => t.success), borderColor: '#4bca81', tension: 0.3 },
+        { label: '失敗', data: d.monthly_trend.map(t => t.failed), borderColor: '#c23934', tension: 0.3 },
+      ],
+    },
+    options: { plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } },
+  });
+
+  // 営業別テーブル
+  const tbody = document.querySelector('#eigyo-table tbody');
+  tbody.innerHTML = '';
+  d.by_eigyo.forEach(e => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><strong>${e.eigyo}</strong></td><td>${e.count}件</td><td>${e.success_rate}%</td><td>${new Date(e.last_ts).toLocaleString('ja-JP')}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  // エラー段階別
+  if (errorChart) errorChart.destroy();
+  errorChart = new Chart(document.getElementById('error-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['抽出', 'マッチング', '価格決定', '受注登録', 'その他'],
+      datasets: [{
+        data: [d.errors.by_stage.extract, d.errors.by_stage.matching, d.errors.by_stage.price, d.errors.by_stage.register, d.errors.by_stage.other],
+        backgroundColor: ['#0070d2', '#ffb75d', '#c23934', '#4bca81', '#999'],
+      }],
+    },
+    options: { plugins: { legend: { position: 'right' } } },
+  });
+}
+
+loadData();
+setInterval(loadData, 60000);  // 1分ごと自動更新
+</script>
+
+</body>
+</html>
